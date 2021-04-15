@@ -84,7 +84,7 @@ unsigned long FileRenderer::render_page_with_box(unsigned long place_in_file, in
 unsigned long FileRenderer::load_into_buffer(char* buffer, unsigned long place) {
     char cur_char = '\0';
     unsigned int plc_in_buffer = 0;
-    int found_newline = 0;
+    //int found_newline = 0;
     int lines_in_buffer = 1;
     int pix_len = 0;
     char single_line[MAX_CHARS_PER_LINE];
@@ -116,10 +116,10 @@ unsigned long FileRenderer::load_into_buffer(char* buffer, unsigned long place) 
         // Turn new lines into spaces, for now.
         // But remember that it was a new line.
         if (cur_char == '\n') {
-            found_newline = 1;
+            //found_newline = 1;
             cur_char = ' ';
         } else {
-            found_newline = 0;
+            //found_newline = 0;
         }
         
         // Terminate and add the character to the buffer
