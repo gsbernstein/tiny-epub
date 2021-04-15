@@ -1,0 +1,75 @@
+#include "Renderer.hpp"
+#include "sindarin-debug.h"
+
+Renderer::Renderer(OpticsSystem* optic_input, DisplaySystem* display_input) {
+    optic = optic_input;
+    display = display_input;
+    compute_min_max();
+}
+
+void Renderer::compute_min_max() {
+    int midpoint_x;
+    int midpoint_y;
+    // pixels per mm
+    float pixel_pitch_x;
+    float pixel_pitch_y;
+
+
+
+    DEBUG_LN("Computing Min and Max pixels for Renderer");
+    
+    midpoint_x = display->get_x()/2;
+    midpoint_y = display->get_y()/2;
+
+    DEBUG_VAR(midpoint_x);
+    DEBUG_LN(" is the midpoint x");
+    DEBUG_VAR(midpoint_y);
+    DEBUG_LN(" is the midpoint y");
+
+
+    pixel_pitch_x = display->get_x() / display->get_width();
+    pixel_pitch_y = display->get_y() / display->get_height();
+
+    DEBUG_VAR(pixel_pitch_x);
+    DEBUG_LN(" is the pixel pitch x");
+    DEBUG_VAR(pixel_pitch_y);
+    DEBUG_LN(" is the pixel pitch y");
+
+    // rounding down is ok here and what we want.
+    max_pixels_x = (int) (optic->get_x_mm() * pixel_pitch_x);
+    max_pixels_y = (int) (optic->get_y_mm() * pixel_pitch_y);
+
+    DEBUG_VAR(max_pixels_x);
+    DEBUG_LN(" is the max pixels x");
+    DEBUG_VAR(max_pixels_y);
+    DEBUG_LN(" is the max pixels y");
+
+    x_min = midpoint_x - max_pixels_x / 2;
+    x_max = midpoint_x + max_pixels_x / 2;
+    y_min = midpoint_y - max_pixels_y / 2;
+    y_max = midpoint_y + max_pixels_y / 2;
+
+    DEBUG_VAR(x_min);
+    DEBUG_LN(" is the x_min");
+    DEBUG_VAR(x_max);
+    DEBUG_LN(" is the x_max");
+    DEBUG_VAR(y_min);
+    DEBUG_LN(" is the y_min");
+    DEBUG_VAR(y_max);
+    DEBUG_LN(" is the y_max");
+}
+
+// Ask the display for the line height so we can set the max lines based
+// on our calcualtion.
+
+void Renderer::compute_max_lines() {
+
+}
+
+void Renderer::render_max_box(int x_offset, int y_offset) {
+    display->draw_box(x_min + x_offset, y_min + y_offset, x_max + x_offset, y_max + y_offset);
+}
+
+void Renderer::render_max_box_with_text(int x_offset, int y_offset, String text) {
+    display->draw_text_in_box(text, x_min + x_offset, y_min + y_offset, x_max + x_offset, y_max + y_offset);
+}
