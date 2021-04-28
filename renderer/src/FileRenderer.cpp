@@ -115,11 +115,23 @@ unsigned long FileRenderer::load_into_buffer(char* buffer, unsigned long place) 
         
         // Turn new lines into spaces, for now.
         // But remember that it was a new line.
-        if (cur_char == '\n') {
-            //found_newline = 1;
-            cur_char = ' ';
-        } else {
-            //found_newline = 0;
+        switch (cur_char) {
+            case '\n':
+                cur_char = ' ';
+                break;
+                /*
+            case '“':
+            case '”':
+                cur_char = '"';
+                break;
+            case '—':
+                cur_char = '-';
+                break;
+            case '‘':
+            case '’':
+                cur_char = '\'';
+                break;
+                */
         }
         
         // Terminate and add the character to the buffer

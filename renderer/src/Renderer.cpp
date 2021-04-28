@@ -27,8 +27,8 @@ void Renderer::compute_min_max() {
     DEBUG_LN(" is the midpoint y");
 
 
-    pixel_pitch_x = display->get_x() / display->get_width();
-    pixel_pitch_y = display->get_y() / display->get_height();
+    pixel_pitch_x = ((float) display->get_x()) / display->get_width();
+    pixel_pitch_y = ((float) display->get_y()) / display->get_height();
 
     DEBUG_VAR(pixel_pitch_x);
     DEBUG_LN(" is the pixel pitch x");
