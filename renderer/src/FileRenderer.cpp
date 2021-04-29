@@ -1,6 +1,8 @@
 #include "FileRenderer.hpp"
 #include "sindarin-debug.h"
 
+#define MAX_CHARS_PER_LINE 200
+
 FileRenderer::FileRenderer(OpticsSystem* optic_input, DisplaySystem* display_input, String name_input, unsigned long place_input, unsigned long prev_input) 
   : Renderer(optic_input, display_input) {
     file_name = name_input;
@@ -18,9 +20,103 @@ FileRenderer::FileRenderer(OpticsSystem* optic_input, DisplaySystem* display_inp
     load_prev_into_buffer();
     load_curr_into_buffer();
 
+    screed_speed = 150;
+    screed_last_time = 0;
+    read_mode = PAGE_READ;
     //load_next_into_buffer();
     // HACK
     //strcpy(next_buffer, curr_buffer);
+}
+
+
+
+void FileRenderer::set_read_mode(int new_mode) {
+    read_mode = new_mode;
+}
+
+int FileRenderer::get_read_mode() {
+    return read_mode;
+}
+
+void FileRenderer::flip_read_mode() {
+    if (read_mode == SCREED_READ)
+        set_read_mode(PAGE_READ);
+    else if (read_mode == PAGE_READ)
+        set_read_mode(SCREED_READ);
+}
+
+void FileRenderer::increase_speed() {
+    screed_speed += 10;
+    
+    if (screed_speed > 1000)
+        screed_speed = 1000;
+}
+
+void FileRenderer::decrease_speed() {
+    screed_speed -= 10;
+
+    if (screed_speed < 50)
+        screed_speed = 50;
+}
+
+void FileRenderer::set_speed(int new_speed) {
+    
+    screed_speed = new_speed;
+
+    if (screed_speed < 50)
+        screed_speed = 50;
+
+    if (screed_speed > 1000)
+        screed_speed = 1000;
+}
+
+unsigned long FileRenderer::render_continue_screed(int x_offset, int y_offset) {
+    if (read_mode != SCREED_READ)
+        return current_place;
+   
+    if ((millis() - screed_last_time) > (60000 / screed_speed)) {        
+        char buffer[MAX_CHARS_PER_LINE];
+        int plc_in_buffer = 0;
+        buffer[0] = '\0';
+        char cur_char;
+
+        screed_last_time = millis();
+        if (!file_handle.seek(current_place)) {
+
+            DEBUG_LN("FAILED TO SEEK");
+            DEBUG_VAR(current_place);
+            DEBUG_LN(" is the place");
+            return 0;
+        }
+
+        while (file_handle.available()) {
+            cur_char = file_handle.read();
+        
+            // Turn new lines into spaces, for now.
+            // But remember that it was a new line.
+            switch (cur_char) {
+                case '\n':
+                 cur_char = ' ';
+                break;
+            }
+            buffer[plc_in_buffer + 1] = '\0';
+            buffer[plc_in_buffer] = cur_char;
+
+            if (buffer[plc_in_buffer] == ' ') {
+                buffer[plc_in_buffer] = '\0';
+                render_max_box_with_word(x_offset, y_offset, String(buffer));
+                DEBUG_LN(buffer);
+                current_place++;
+                break;
+            } else {
+                current_place++;
+            }
+            plc_in_buffer++;
+        
+        }
+    }
+    //DEBUG_LN("NEXT UP");
+    return current_place;
 }
 
 
@@ -78,7 +174,7 @@ unsigned long FileRenderer::render_page_with_box(unsigned long place_in_file, in
     return next_pos;
 }
 
-#define MAX_CHARS_PER_LINE 200
+
 
 // returns the new place of the file_handle
 unsigned long FileRenderer::load_into_buffer(char* buffer, unsigned long place) {

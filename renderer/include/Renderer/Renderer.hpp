@@ -11,6 +11,8 @@ class Renderer {
       void render_max_box(int x_offset, int y_offset);
       void render_max_box_with_text(int x_offset, int y_offset, String text);
       
+      void render_max_box_with_word(int x_offset, int y_offset, String word);
+      
     protected:
         OpticsSystem* optic;
         DisplaySystem* display;

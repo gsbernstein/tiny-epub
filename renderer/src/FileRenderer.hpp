@@ -5,10 +5,25 @@
 #include "SPIFFS.h"
 
 #define MAX_CHARS_PER_PAGE 1000
+#define PAGE_READ 1
+#define SCREED_READ 2
+
 
 class FileRenderer : public Renderer {
     public:
         FileRenderer(OpticsSystem* optic_input, DisplaySystem* display_input, String name_input, unsigned long place_input, unsigned long prev_input);
+
+        void set_read_mode(int new_mode);
+        int get_read_mode();
+        void flip_read_mode();
+
+        void increase_speed();
+        void decrease_speed();
+        void set_speed(int new_speed);
+
+        // Always call this on each loop.
+        // If not screed, it'll be a nop
+        unsigned long render_continue_screed(int x_offset, int y_offset);
 
         // Render a page of text with the current place
         // returns the next place for reading so the calling function can
@@ -18,6 +33,12 @@ class FileRenderer : public Renderer {
 
     protected:
        
+        unsigned long screed_last_time;
+
+        int screed_speed;
+
+        int read_mode;
+
         String file_name = "";
         File file_handle;
 
