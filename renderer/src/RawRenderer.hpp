@@ -1,0 +1,66 @@
+#ifndef RAW_RENDERER_H
+#define RAW_RENDERER_H
+
+#include "Renderer.hpp"
+#include "Contents/Readable.hpp"
+
+#include <iostream>
+#include <fstream>
+#include <sstream>
+#include <string>
+
+#define MAX_CHARS_PER_PAGE 1000
+#define PAGE_READ 1
+#define SCREED_READ 2
+
+class RawRenderer : public Renderer
+{
+public:
+    RawRenderer(OpticsSystem *optic_input, DisplaySystem *display_input, std::string &rawData);
+
+    void set_read_mode(int new_mode);
+    int get_read_mode();
+    void flip_read_mode();
+
+    void increase_speed();
+    void decrease_speed();
+    void set_speed(int new_speed);
+
+    // Always call this on each loop.
+    // If not screed, it'll be a nop
+    unsigned long render_continue_screed(int x_offset, int y_offset);
+
+    // Render a page of text with the current place
+    // returns the next place for reading so the calling function can
+    // track place.
+    unsigned long render_page_with_box(unsigned long place_in_file, int x_offset, int y_offset);
+
+protected:
+    std::string &raw_data;
+    std::istringstream data_stream;
+
+    unsigned long screed_last_time;
+
+    int screed_speed;
+
+    int read_mode;
+
+    unsigned long current_place = 0;
+    unsigned long previous_place = 0;
+    unsigned long next_place = 0;
+    int first_go_around = 1;
+
+    char prev_buffer[MAX_CHARS_PER_PAGE];
+    char curr_buffer[MAX_CHARS_PER_PAGE];
+    char next_buffer[MAX_CHARS_PER_PAGE];
+
+    unsigned long load_prev_into_buffer();
+    unsigned long load_curr_into_buffer();
+    unsigned long load_next_into_buffer();
+
+    // This does the work of lineify from the old system. Loads one page of
+    // text into that buffer given the current offset in the file
+    unsigned long load_into_buffer(char *buffer, unsigned long place);
+};
+
+#endif

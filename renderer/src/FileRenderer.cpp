@@ -16,7 +16,6 @@ FileRenderer::FileRenderer(OpticsSystem *optic_input, DisplaySystem *display_inp
 
     current_place = readable_input.place;
     previous_place = readable_input.place_prev;
-    DEBUG_F("Loaded %s at %u / %u\n", readable_input.id, readable_input.place, readable_input.place_prev);
 
     // LOAD TEXT for prev, current.
     load_prev_into_buffer();
