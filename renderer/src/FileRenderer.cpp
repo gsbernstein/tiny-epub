@@ -3,18 +3,20 @@
 
 #define MAX_CHARS_PER_LINE 200
 
-FileRenderer::FileRenderer(OpticsSystem* optic_input, DisplaySystem* display_input, String name_input, unsigned long place_input, unsigned long prev_input) 
-  : Renderer(optic_input, display_input) {
-    file_name = name_input;
-    file_handle = SPIFFS.open(file_name);
+FileRenderer::FileRenderer(OpticsSystem *optic_input, DisplaySystem *display_input, Readable &readable_input)
+    : Renderer(optic_input, display_input)
+{
+    DEBUG_F("Attempting to open: %s\n", readable_input.path);
+    file_handle = SPIFFS.open(readable_input.path);
     if (!file_handle) {
         DEBUG_LN("Failed to open file: ");
-        DEBUG_VAR(file_name);
+        DEBUG_VAR(readable_input.path);
         DEBUG_LN(" is the filename");
     }
 
-    current_place = place_input;
-    previous_place = prev_input;
+    current_place = readable_input.place;
+    previous_place = readable_input.place_prev;
+    DEBUG_F("Loaded %s at %u / %u\n", readable_input.id, readable_input.place, readable_input.place_prev);
 
     // LOAD TEXT for prev, current.
     load_prev_into_buffer();
@@ -27,8 +29,6 @@ FileRenderer::FileRenderer(OpticsSystem* optic_input, DisplaySystem* display_inp
     // HACK
     //strcpy(next_buffer, curr_buffer);
 }
-
-
 
 void FileRenderer::set_read_mode(int new_mode) {
     read_mode = new_mode;

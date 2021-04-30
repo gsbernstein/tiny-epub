@@ -2,6 +2,7 @@
 #define FILE_RENDERER_H
 
 #include "Renderer.hpp"
+#include "Contents/Readable.hpp"
 #include "SPIFFS.h"
 
 #define MAX_CHARS_PER_PAGE 1000
@@ -11,7 +12,7 @@
 
 class FileRenderer : public Renderer {
     public:
-        FileRenderer(OpticsSystem* optic_input, DisplaySystem* display_input, String name_input, unsigned long place_input, unsigned long prev_input);
+        FileRenderer(OpticsSystem *optic_input, DisplaySystem *display_input, Readable &readable_input);
 
         void set_read_mode(int new_mode);
         int get_read_mode();
@@ -39,7 +40,6 @@ class FileRenderer : public Renderer {
 
         int read_mode;
 
-        String file_name = "";
         File file_handle;
 
         unsigned long current_place = 0;
