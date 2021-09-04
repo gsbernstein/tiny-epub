@@ -35,6 +35,8 @@ public:
     // track place.
     unsigned long render_page_with_box(unsigned long place_in_file, int x_offset, int y_offset);
 
+     unsigned long get_previous_place();
+
 protected:
     std::string &raw_data;
     std::istringstream data_stream;

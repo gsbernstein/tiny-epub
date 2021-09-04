@@ -22,6 +22,8 @@ class FileRenderer : public Renderer {
         void decrease_speed();
         void set_speed(int new_speed);
 
+        unsigned long get_previous_place();
+
         // Always call this on each loop.
         // If not screed, it'll be a nop
         unsigned long render_continue_screed(int x_offset, int y_offset);
