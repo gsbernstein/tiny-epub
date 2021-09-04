@@ -6,6 +6,9 @@
 FileRenderer::FileRenderer(OpticsSystem *optic_input, DisplaySystem *display_input, Readable &readable_input)
     : Renderer(optic_input, display_input)
 {
+
+    // Pushing change to backwards-lineify branch
+    
     DEBUG_F("Attempting to open: %s\n", readable_input.path);
     file_handle = SPIFFS.open(readable_input.path);
     if (!file_handle) {
