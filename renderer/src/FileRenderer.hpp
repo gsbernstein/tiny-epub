@@ -5,7 +5,7 @@
 #include "Contents/Readable.hpp"
 #include "SPIFFS.h"
 
-#define MAX_CHARS_PER_PAGE 1000
+#define MAX_CHARS_PER_PAGE 1500
 #define PAGE_READ 1
 #define SCREED_READ 2
 
@@ -31,6 +31,7 @@ class FileRenderer : public Renderer {
         // track place.
         unsigned long render_page_with_box(unsigned long place_in_file, int x_offset, int y_offset);
 
+        unsigned long go_backwards_one_page(unsigned long place);
 
     protected:
        

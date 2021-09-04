@@ -9,7 +9,7 @@
 #include <sstream>
 #include <string>
 
-#define MAX_CHARS_PER_PAGE 1000
+#define MAX_CHARS_PER_PAGE 1500
 #define PAGE_READ 1
 #define SCREED_READ 2
 
