@@ -11,7 +11,7 @@ FileRenderer::FileRenderer(OpticsSystem *optic_input, DisplaySystem *display_inp
     DEBUG_F("Attempting to open: %s\n", readable_input.path);
     file_handle = SPIFFS.open(readable_input.path);
     if (!file_handle) {
-        DEBUG_F("Failed to open file: %s is the filename", readable_input.path)
+        DEBUG_F("Failed to open file: %s is the filename", readable_input.path);
 
         // We probably need some way of doing error handling.
         return;
@@ -96,7 +96,7 @@ unsigned long FileRenderer::render_continue_screed(int x_offset, int y_offset) {
         if (!file_handle.seek(current_place)) {
 
             DEBUG_F("failed to seek: %lu is the place", current_place);
-            
+
             // This is a fragile since 0 is a valid file handle position. TODO to fix.
             return 0;
         }
