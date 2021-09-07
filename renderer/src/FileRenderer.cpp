@@ -6,26 +6,31 @@
 FileRenderer::FileRenderer(OpticsSystem *optic_input, DisplaySystem *display_input, Readable &readable_input)
     : Renderer(optic_input, display_input)
 {
-
-    // Pushing change to backwards-lineify branch
-
-    // Second push
     int old_next_place;
 
     DEBUG_F("Attempting to open: %s\n", readable_input.path);
     file_handle = SPIFFS.open(readable_input.path);
     if (!file_handle) {
-        DEBUG_LN("Failed to open file: ");
-        DEBUG_VAR(readable_input.path);
-        DEBUG_LN(" is the filename");
+        DEBUG_F("Failed to open file: %s is the filename", readable_input.path)
+
+        // We probably need some way of doing error handling.
+        return;
     }
 
     current_place = readable_input.place;
-    //previous_place = readable_input.place_prev;
 
     previous_place = go_backwards_one_page(current_place);
 
     // LOAD TEXT for prev, current.
+    // The contract for users of this class is that this class will always keep the current page,
+    // the previous page, and the next page in a buffer so that on page swaps, the render can
+    // happen immediately without any filesystem access. Then, *after* a page is rendered, the new
+    // previous and next pages can be loaded. This allows for buffering to happen while a user
+    // is reading the current page.
+    //
+    // It's a little broken in that load_curr_into_buffer does the wrong thing and updates class
+    // variables (essentially moving the current seek position in the file), hence this dance here
+    // to make sure they are correct.
     load_prev_into_buffer();
     next_place = load_curr_into_buffer();
     old_next_place = next_place;
@@ -35,9 +40,6 @@ FileRenderer::FileRenderer(OpticsSystem *optic_input, DisplaySystem *display_inp
     screed_speed = 150;
     screed_last_time = 0;
     read_mode = PAGE_READ;
-    //load_next_into_buffer();
-    // HACK
-    //strcpy(next_buffer, curr_buffer);
 }
 
 void FileRenderer::set_read_mode(int new_mode) {
@@ -93,9 +95,9 @@ unsigned long FileRenderer::render_continue_screed(int x_offset, int y_offset) {
         screed_last_time = millis();
         if (!file_handle.seek(current_place)) {
 
-            DEBUG_LN("FAILED TO SEEK");
-            DEBUG_VAR(current_place);
-            DEBUG_LN(" is the place");
+            DEBUG_F("failed to seek: %lu is the place", current_place);
+            
+            // This is a fragile since 0 is a valid file handle position. TODO to fix.
             return 0;
         }
 
@@ -133,82 +135,21 @@ unsigned long FileRenderer::get_previous_place() {
     return previous_place;
 }
 
-//unsigned long FileRenderer::render_next_page_with_box(unsigned long place_in_file, int x_offset, int y_offset) {
-//
-//
-//}
-
 // Show the (already loaded into buffer) current page
 // and load the next page into the next buffer so we have it.
 unsigned long FileRenderer::render_page_with_box(unsigned long place_in_file, int x_offset, int y_offset) {
     unsigned long next_pos = 0;
 
-
-    //if (place_in_file == current_place) {
-     //   DEBUG_LN("input place is same as current place");
-      //  DEBUG_VAR(place_in_file);
-      //  DEBUG_LN(" is place in file and current place");
-       // render_max_box_with_text(x_offset, y_offset, curr_buffer);
-        //DEBUG_LN(curr_buffer);
-        //DEBUG_VAR(next_place);
-        //DEBUG_LN(" IS THE NEXT PLACE FROM REDNER_PAGE_WITH_BOX");
-        //strcpy(prev_buffer, curr_buffer);
-        
-        // Have to handle initial case. Barf.
-        //if (first_go_around) {
-        //    load_next_into_buffer();
-        //    first_go_around = 0;
-       // }
-        //previous_place = go_backwards_one_page(current_place);
-        //load_prev_into_buffer();
-        //next_pos = next_place;
-     //} else {
-        DEBUG_LN("ALL OTHER CASES");
-        DEBUG_VAR(place_in_file);
-        DEBUG_LN(" is place in file THAT IS BEING REQUESTED");
-        current_place = place_in_file;
-        next_place = load_curr_into_buffer();
-        render_max_box_with_text(x_offset, y_offset, curr_buffer);
-        next_pos = next_place;
-        load_next_into_buffer();
-        previous_place = go_backwards_one_page(current_place);
-        load_prev_into_buffer();
-        DEBUG_LN(" FINISHED UP LOADING PREV AND LOADING NEXT");
-     //} 
-     
-     /*
-     else if (place_in_file == previous_place) {
-        DEBUG_LN("input place is same as previous place");
-        // Only do something if we haven't pressed previous twice
-        if (current_place != previous_place) {
-          render_max_box_with_text(x_offset, y_offset, prev_buffer);
-          strcpy(next_buffer, curr_buffer);
-          strcpy(curr_buffer, prev_buffer);
-          next_pos = current_place;
-          current_place = previous_place;
-          previous_place = go_backwards_one_page(next_pos);
-          load_prev_into_buffer();
-        }
-    } else if (place_in_file == next_place) {
-        DEBUG_LN("input place is same as next place");
-        previous_place = current_place;
-        strcpy(prev_buffer, curr_buffer);
-        strcpy(curr_buffer, next_buffer);
-        current_place = next_place;
-        render_max_box_with_text(x_offset, y_offset, next_buffer);
-        next_pos = load_next_into_buffer();
-    }
-    else {
-        DEBUG_VAR(next_place);
-        DEBUG_LN(" DIDN'T MATCH");
-        DEBUG_VAR(place_in_file);
-        DEBUG_LN(" was the place passed in");
-        current_place = place_in_file;
-        next_pos = load_curr_into_buffer();
-        render_max_box_with_text(x_offset, y_offset, curr_buffer);
-        previous_place = go_backwards_one_page(current_place);
-        load_prev_into_buffer();
-    }*/
+    DEBUG_VAR(place_in_file);
+    DEBUG_LN(" is place in file being requested");
+    current_place = place_in_file;
+    next_place = load_curr_into_buffer();
+    render_max_box_with_text(x_offset, y_offset, curr_buffer);
+    next_pos = next_place;
+    load_next_into_buffer();
+    previous_place = go_backwards_one_page(current_place);
+    load_prev_into_buffer();
+    DEBUG_LN("finished loading previous -- now loading next");
     next_place = next_pos;
     return next_pos;
 }
@@ -219,6 +160,16 @@ unsigned long FileRenderer::render_page_with_box(unsigned long place_in_file, in
 // page previous, not to load anything into buffers. It's a little less 
 // efficient, but given the load_into_buffer function works, we will opt for
 // the inefficiency for now rather than rewrite the whole thing.
+
+// The place that is being passed in points to the first character of a page.
+// Going back one place from there points to a space. Going back two places
+// from there points to the last character of the previous word. Hence, we
+// need to rewind two spaces from the place passed in for the work we do in
+// this method.
+//
+// Could also be a const int, but that's up to the code reviewer overlords ;)
+//
+#define PLACE_REWIND 2
 
 unsigned long FileRenderer::go_backwards_one_page(unsigned long place) {
 
@@ -236,13 +187,13 @@ unsigned long FileRenderer::go_backwards_one_page(unsigned long place) {
     // one word. But the above return 0 and check on place == 0
     // should assure that.
     if (place < MAX_CHARS_PER_PAGE) {
-        num_chars_to_read = place - 2;
+        num_chars_to_read = place - PLACE_REWIND;
         seek_place = 0;
     }
     else {
         num_chars_to_read =  MAX_CHARS_PER_PAGE;
-        seek_place = place - num_chars_to_read - 2;
-        if (place - num_chars_to_read - 2 < 0)
+        seek_place = place - num_chars_to_read - PLACE_REWIND;
+        if (place - num_chars_to_read - PLACE_REWIND < 0)
             seek_place = 0;
     }
 
@@ -255,10 +206,10 @@ unsigned long FileRenderer::go_backwards_one_page(unsigned long place) {
         return 0;
 
     if (!file_handle.seek(seek_place)) {
-        DEBUG_LN("FAILED TO SEEK IN GO BACKWARDS FUNCTION");
-        DEBUG_VAR(place);
-        DEBUG_LN(" is the place");
-        return -1;
+        DEBUG_F("failed to seek in go_backwards: %lu is the place", place);
+
+        // This is a fragile since 0 is a valid file handle position. TODO to fix.
+        return 0;
     }
 
     while (file_handle.available()) {
@@ -274,11 +225,6 @@ unsigned long FileRenderer::go_backwards_one_page(unsigned long place) {
             break;
         }
     }
-
-    //DEBUG_LN("Looking backwards ");
-    //DEBUG_VAR(total_chars_read);
-    //DEBUG_LN(" is the total characters read");
-
 
     // At this point, the main_backwards_buffer will have more than a page worth of 
     // characters in backwards. So if we read forward and lineify, we should be able to
@@ -383,16 +329,14 @@ unsigned long FileRenderer::go_backwards_one_page(unsigned long place) {
 
     unsigned long previous_place_in_file;
 
-
-    if ((place - total_chars_read - 2) <= 0)
+    // similarly to the logic above for starting PLACE_REWIND behind, we need move back those spaces
+    // again when calculating what to return based on the number of characters read in lineify and
+    // the place passed in.
+    if ((place - total_chars_read - PLACE_REWIND) <= 0)
         previous_place_in_file = 0;
     else
-        previous_place_in_file = place - total_chars_read - 2;
+        previous_place_in_file = place - total_chars_read - PLACE_REWIND;
 
-    //DEBUG_LN("Ending the look backwards");
-    //DEBUG_VAR(previous_place_in_file);
-    //DEBUG_LN(" is the Previous place we found to return");
-    
     return previous_place_in_file;
 }
 
@@ -419,11 +363,9 @@ unsigned long FileRenderer::load_into_buffer(char* buffer, unsigned long place) 
     single_line[chars_in_line] = cur_char;
 
     if (!file_handle.seek(place)) {
-
-        DEBUG_LN("FAILED TO SEEK");
-        DEBUG_VAR(place);
-        DEBUG_LN(" is the place");
-        return -1;
+        DEBUG_F("failed to seek %lu is the place", place);
+        // This is a fragile since 0 is a valid file handle position. TODO to fix.
+        return 0;
     }
 
     while (file_handle.available()) {
