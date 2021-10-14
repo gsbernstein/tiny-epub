@@ -1,20 +1,19 @@
 #ifndef RAW_RENDERER_H
 #define RAW_RENDERER_H
 
-#include "Renderer.hpp"
-#include "Contents/Readable.hpp"
-
-#include <iostream>
 #include <fstream>
+#include <iostream>
 #include <sstream>
 #include <string>
+
+#include "Contents/Readable.hpp"
+#include "Renderer.hpp"
 
 #define MAX_CHARS_PER_PAGE 1500
 #define PAGE_READ 1
 #define SCREED_READ 2
 
-class RawRenderer : public Renderer
-{
+class RawRenderer : public Renderer {
 public:
     RawRenderer(OpticsSystem *optic_input, DisplaySystem *display_input, std::string &rawData);
 
@@ -35,7 +34,7 @@ public:
     // track place.
     unsigned long render_page_with_box(unsigned long place_in_file, int x_offset, int y_offset);
 
-     unsigned long get_previous_place();
+    unsigned long get_previous_place();
 
 protected:
     std::string &raw_data;
