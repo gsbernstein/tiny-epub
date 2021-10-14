@@ -9,11 +9,11 @@ public:
     Renderer(OpticsSystem *optic_input, DisplaySystem *display_input);
 
     void render_max_box(int x_offset, int y_offset);
-    void render_max_box_with_text(int x_offset, int y_offset, String text);
+    void render_max_box_with_text(int x_offset, int y_offset, const String &text);
 
-    void render_max_box_with_word(int x_offset, int y_offset, String word);
+    void render_max_box_with_word(int x_offset, int y_offset, const String &word);
 
-    unsigned long get_previous_place();
+    auto get_previous_place() -> unsigned long;
 
 protected:
     OpticsSystem *optic;

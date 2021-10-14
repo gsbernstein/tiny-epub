@@ -45,7 +45,7 @@ FileRenderer::FileRenderer(OpticsSystem *optic_input, DisplaySystem *display_inp
 
 void FileRenderer::set_read_mode(int new_mode) { read_mode = new_mode; }
 
-int FileRenderer::get_read_mode() { return read_mode; }
+auto FileRenderer::get_read_mode() -> int { return read_mode; }
 
 void FileRenderer::flip_read_mode() {
     if (read_mode == SCREED_READ)
@@ -79,7 +79,7 @@ void FileRenderer::set_speed(int new_speed) {
         screed_speed = 1000;
 }
 
-unsigned long FileRenderer::render_continue_screed(int x_offset, int y_offset) {
+auto FileRenderer::render_continue_screed(int x_offset, int y_offset) -> unsigned long {
     if (read_mode != SCREED_READ)
         return current_place;
 
@@ -127,12 +127,12 @@ unsigned long FileRenderer::render_continue_screed(int x_offset, int y_offset) {
     return current_place;
 }
 
-unsigned long FileRenderer::get_previous_place() { return previous_place; }
+auto FileRenderer::get_previous_place() -> unsigned long { return previous_place; }
 
 // Show the (already loaded into buffer) current page
 // and load the next page into the next buffer so we have it.
-unsigned long FileRenderer::render_page_with_box(unsigned long place_in_file, int x_offset,
-                                                 int y_offset) {
+auto FileRenderer::render_page_with_box(unsigned long place_in_file, int x_offset, int y_offset)
+    -> unsigned long {
     unsigned long next_pos = 0;
 
     DEBUG_VAR(place_in_file);
@@ -166,7 +166,7 @@ unsigned long FileRenderer::render_page_with_box(unsigned long place_in_file, in
 //
 #define PLACE_REWIND 2
 
-unsigned long FileRenderer::go_backwards_one_page(unsigned long place) {
+auto FileRenderer::go_backwards_one_page(unsigned long place) -> unsigned long {
 
     char cur_char = '\0';
     char main_backwards_buffer[MAX_CHARS_PER_PAGE + 1];
@@ -333,7 +333,7 @@ unsigned long FileRenderer::go_backwards_one_page(unsigned long place) {
 }
 
 // returns the new place of the file_handle
-unsigned long FileRenderer::load_into_buffer(char *buffer, unsigned long place) {
+auto FileRenderer::load_into_buffer(char *buffer, unsigned long place) -> unsigned long {
     char cur_char = '\0';
     unsigned int plc_in_buffer = 0;
     // int found_newline = 0;
@@ -446,17 +446,17 @@ unsigned long FileRenderer::load_into_buffer(char *buffer, unsigned long place) 
     return prev_seek_pos;
 }
 
-unsigned long FileRenderer::load_prev_into_buffer() {
+auto FileRenderer::load_prev_into_buffer() -> unsigned long {
     DEBUG_LN("Loading PREV into buffer");
     return load_into_buffer(prev_buffer, previous_place);
 }
 
-unsigned long FileRenderer::load_curr_into_buffer() {
+auto FileRenderer::load_curr_into_buffer() -> unsigned long {
     DEBUG_LN("Loading CURR into buffer");
     return load_into_buffer(curr_buffer, current_place);
 }
 
-unsigned long FileRenderer::load_next_into_buffer() {
+auto FileRenderer::load_next_into_buffer() -> unsigned long {
     DEBUG_LN("Loading NEXT into buffer");
     return load_into_buffer(next_buffer, next_place);
 }

@@ -14,25 +14,26 @@ public:
     FileRenderer(OpticsSystem *optic_input, DisplaySystem *display_input, Readable &readable_input);
 
     void set_read_mode(int new_mode);
-    int get_read_mode();
+    auto get_read_mode() -> int;
     void flip_read_mode();
 
     void increase_speed();
     void decrease_speed();
     void set_speed(int new_speed);
 
-    unsigned long get_previous_place();
+    auto get_previous_place() -> unsigned long;
 
     // Always call this on each loop.
     // If not screed, it'll be a nop
-    unsigned long render_continue_screed(int x_offset, int y_offset);
+    auto render_continue_screed(int x_offset, int y_offset) -> unsigned long;
 
     // Render a page of text with the current place
     // returns the next place for reading so the calling function can
     // track place.
-    unsigned long render_page_with_box(unsigned long place_in_file, int x_offset, int y_offset);
+    auto render_page_with_box(unsigned long place_in_file, int x_offset, int y_offset)
+        -> unsigned long;
 
-    unsigned long go_backwards_one_page(unsigned long place);
+    auto go_backwards_one_page(unsigned long place) -> unsigned long;
 
 protected:
     unsigned long screed_last_time;
@@ -52,13 +53,13 @@ protected:
     char curr_buffer[MAX_CHARS_PER_PAGE];
     char next_buffer[MAX_CHARS_PER_PAGE];
 
-    unsigned long load_prev_into_buffer();
-    unsigned long load_curr_into_buffer();
-    unsigned long load_next_into_buffer();
+    auto load_prev_into_buffer() -> unsigned long;
+    auto load_curr_into_buffer() -> unsigned long;
+    auto load_next_into_buffer() -> unsigned long;
 
     // This does the work of lineify from the old system. Loads one page of
     // text into that buffer given the current offset in the file
-    unsigned long load_into_buffer(char *buffer, unsigned long place);
+    auto load_into_buffer(char *buffer, unsigned long place) -> unsigned long;
 };
 
 #endif

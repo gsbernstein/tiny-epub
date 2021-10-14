@@ -25,7 +25,7 @@ RawRenderer::RawRenderer(OpticsSystem *optic_input, DisplaySystem *display_input
 
 void RawRenderer::set_read_mode(int new_mode) { read_mode = new_mode; }
 
-int RawRenderer::get_read_mode() { return read_mode; }
+auto RawRenderer::get_read_mode() -> int { return read_mode; }
 
 void RawRenderer::flip_read_mode() {
     if (read_mode == SCREED_READ)
@@ -59,7 +59,7 @@ void RawRenderer::set_speed(int new_speed) {
         screed_speed = 1000;
 }
 
-unsigned long RawRenderer::render_continue_screed(int x_offset, int y_offset) {
+auto RawRenderer::render_continue_screed(int x_offset, int y_offset) -> unsigned long {
     if (read_mode != SCREED_READ)
         return current_place;
 
@@ -109,8 +109,8 @@ unsigned long RawRenderer::render_continue_screed(int x_offset, int y_offset) {
 
 // Show the (already loaded into buffer) current page
 // and load the next page into the next buffer so we have it.
-unsigned long RawRenderer::render_page_with_box(unsigned long place_in_file, int x_offset,
-                                                int y_offset) {
+auto RawRenderer::render_page_with_box(unsigned long place_in_file, int x_offset, int y_offset)
+    -> unsigned long {
     unsigned long next_pos = 0;
 
     if (place_in_file == current_place) {
@@ -161,7 +161,7 @@ unsigned long RawRenderer::render_page_with_box(unsigned long place_in_file, int
 }
 
 // returns the new place of the file_handle
-unsigned long RawRenderer::load_into_buffer(char *buffer, unsigned long place) {
+auto RawRenderer::load_into_buffer(char *buffer, unsigned long place) -> unsigned long {
     char cur_char = '\0';
     unsigned int plc_in_buffer = 0;
     // int found_newline = 0;
@@ -271,17 +271,17 @@ unsigned long RawRenderer::load_into_buffer(char *buffer, unsigned long place) {
     return prev_seek_pos;
 }
 
-unsigned long RawRenderer::load_prev_into_buffer() {
+auto RawRenderer::load_prev_into_buffer() -> unsigned long {
     DEBUG_LN("Loading PREV into buffer");
     return load_into_buffer(prev_buffer, previous_place);
 }
 
-unsigned long RawRenderer::load_curr_into_buffer() {
+auto RawRenderer::load_curr_into_buffer() -> unsigned long {
     DEBUG_LN("Loading CURR into buffer");
     return load_into_buffer(curr_buffer, current_place);
 }
 
-unsigned long RawRenderer::load_next_into_buffer() {
+auto RawRenderer::load_next_into_buffer() -> unsigned long {
     DEBUG_LN("Loading NEXT into buffer");
     return load_into_buffer(next_buffer, next_place);
 }
