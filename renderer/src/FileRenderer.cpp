@@ -1,5 +1,6 @@
 #include "FileRenderer.hpp"
 
+#include "Storage/FileSystem.hpp"
 #include "sindarin-debug.h"
 
 #define MAX_CHARS_PER_LINE 200
@@ -10,7 +11,7 @@ FileRenderer::FileRenderer(OpticsSystem *optic_input, DisplaySystem *display_inp
     int old_next_place;
 
     log_d("Attempting to open: %s", readable_input.path);
-    file_handle = SPIFFS.open(readable_input.path);
+    file_handle = FileSystem::getInstance()->open(readable_input.path);
     if (!file_handle) {
         log_e("Failed to open file: %s is the filename", readable_input.path);
         return;

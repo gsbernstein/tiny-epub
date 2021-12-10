@@ -3,7 +3,7 @@
 
 #include "Contents/Readable.hpp"
 #include "Renderer.hpp"
-#include "SPIFFS.h"
+#include <FS.h>
 
 #define MAX_CHARS_PER_PAGE 1500
 #define PAGE_READ 1
