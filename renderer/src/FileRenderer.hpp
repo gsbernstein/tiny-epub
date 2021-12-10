@@ -1,9 +1,10 @@
 #ifndef FILE_RENDERER_H
 #define FILE_RENDERER_H
 
+#include <FS.h>
+
 #include "Contents/Readable.hpp"
 #include "Renderer.hpp"
-#include <FS.h>
 
 #define MAX_CHARS_PER_PAGE 1500
 #define PAGE_READ 1
