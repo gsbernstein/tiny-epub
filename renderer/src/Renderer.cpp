@@ -17,46 +17,30 @@ void Renderer::compute_min_max() {
     float pixel_pitch_x;
     float pixel_pitch_y;
 
-    DEBUG_LN("Computing Min and Max pixels for Renderer");
+    log_d("Computing Min and Max pixels for Renderer");
 
     midpoint_x = display->get_x() / 2;
     midpoint_y = display->get_y() / 2;
 
-    DEBUG_VAR(midpoint_x);
-    DEBUG_LN(" is the midpoint x");
-    DEBUG_VAR(midpoint_y);
-    DEBUG_LN(" is the midpoint y");
+    log_d("midpoint = (%d, %d)", midpoint_x, midpoint_y);
 
     pixel_pitch_x = ((float)display->get_x()) / display->get_width();
     pixel_pitch_y = ((float)display->get_y()) / display->get_height();
 
-    DEBUG_VAR(pixel_pitch_x);
-    DEBUG_LN(" is the pixel pitch x");
-    DEBUG_VAR(pixel_pitch_y);
-    DEBUG_LN(" is the pixel pitch y");
+    log_d("pixel pitch = (%d, %d)", pixel_pitch_x, pixel_pitch_y);
 
     // rounding down is ok here and what we want.
     max_pixels_x = (int)(optic->get_x_mm() * pixel_pitch_x);
     max_pixels_y = (int)(optic->get_y_mm() * pixel_pitch_y);
 
-    DEBUG_VAR(max_pixels_x);
-    DEBUG_LN(" is the max pixels x");
-    DEBUG_VAR(max_pixels_y);
-    DEBUG_LN(" is the max pixels y");
+    log_d("max pixels = (%d, %d)", max_pixels_x, max_pixels_y);
 
     x_min = midpoint_x - max_pixels_x / 2;
     x_max = midpoint_x + max_pixels_x / 2;
     y_min = midpoint_y - max_pixels_y / 2;
     y_max = midpoint_y + max_pixels_y / 2;
 
-    DEBUG_VAR(x_min);
-    DEBUG_LN(" is the x_min");
-    DEBUG_VAR(x_max);
-    DEBUG_LN(" is the x_max");
-    DEBUG_VAR(y_min);
-    DEBUG_LN(" is the y_min");
-    DEBUG_VAR(y_max);
-    DEBUG_LN(" is the y_max");
+    log_d("min = (%d, %d) max = (%d, %d)", x_min, y_min, x_max, y_max);
 }
 
 // Ask the display for the line height so we can set the max lines based

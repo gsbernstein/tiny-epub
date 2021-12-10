@@ -1,5 +1,6 @@
 #include "FileRenderer.hpp"
 
+#include "Storage/FileSystem.hpp"
 #include "sindarin-debug.h"
 
 #define MAX_CHARS_PER_LINE 200
@@ -9,12 +10,10 @@ FileRenderer::FileRenderer(OpticsSystem *optic_input, DisplaySystem *display_inp
     : Renderer(optic_input, display_input) {
     int old_next_place;
 
-    DEBUG_F("Attempting to open: %s\n", readable_input.path);
-    file_handle = SPIFFS.open(readable_input.path);
+    log_d("Attempting to open: %s", readable_input.path);
+    file_handle = FileSystem::getInstance()->open(readable_input.path);
     if (!file_handle) {
-        DEBUG_F("Failed to open file: %s is the filename", readable_input.path);
-
-        // We probably need some way of doing error handling.
+        log_e("Failed to open file: %s is the filename", readable_input.path);
         return;
     }
 
@@ -87,7 +86,7 @@ auto FileRenderer::render_continue_screed() -> unsigned long {
         screed_last_time = millis();
         if (!file_handle.seek(current_place)) {
 
-            DEBUG_F("failed to seek: %lu is the place", current_place);
+            log_e("failed to seek: %lu is the place", current_place);
 
             // This is a fragile since 0 is a valid file handle position. TODO to fix.
             return 0;
@@ -191,7 +190,7 @@ auto FileRenderer::go_backwards_one_page(unsigned long place) -> unsigned long {
     if (place == 0) return 0;
 
     if (!file_handle.seek(seek_place)) {
-        DEBUG_F("failed to seek in go_backwards: %lu is the place", place);
+        log_e("failed to seek in go_backwards: %lu is the place", place);
 
         // This is a fragile since 0 is a valid file handle position. TODO to fix.
         return 0;
@@ -347,7 +346,7 @@ auto FileRenderer::load_into_buffer(char *buffer, unsigned long place) -> unsign
     single_line[chars_in_line] = cur_char;
 
     if (!file_handle.seek(place)) {
-        DEBUG_F("failed to seek %lu is the place", place);
+        log_e("failed to seek %lu is the place", place);
         // This is a fragile since 0 is a valid file handle position. TODO to fix.
         return 0;
     }
