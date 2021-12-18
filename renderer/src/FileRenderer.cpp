@@ -128,8 +128,7 @@ auto FileRenderer::get_previous_place() -> unsigned long { return previous_place
 auto FileRenderer::render_page_with_box(unsigned long place_in_file) -> unsigned long {
     unsigned long next_pos = 0;
 
-    DEBUG_VAR(place_in_file);
-    DEBUG_LN(" is place in file being requested");
+    log_i("%d is place in file being requested", place_in_file);
     current_place = place_in_file;
     next_place = load_curr_into_buffer();
     render_max_box_with_text(curr_buffer);
@@ -137,7 +136,7 @@ auto FileRenderer::render_page_with_box(unsigned long place_in_file) -> unsigned
     load_next_into_buffer();
     previous_place = go_backwards_one_page(current_place);
     load_prev_into_buffer();
-    DEBUG_LN("finished loading previous -- now loading next");
+    log_d("finished loading previous -- now loading next");
     next_place = next_pos;
     return next_pos;
 }
@@ -438,16 +437,16 @@ auto FileRenderer::load_into_buffer(char *buffer, unsigned long place) -> unsign
 }
 
 auto FileRenderer::load_prev_into_buffer() -> unsigned long {
-    DEBUG_LN("Loading PREV into buffer");
+    log_d("Loading PREV into buffer");
     return load_into_buffer(prev_buffer, previous_place);
 }
 
 auto FileRenderer::load_curr_into_buffer() -> unsigned long {
-    DEBUG_LN("Loading CURR into buffer");
+    log_d("Loading CURR into buffer");
     return load_into_buffer(curr_buffer, current_place);
 }
 
 auto FileRenderer::load_next_into_buffer() -> unsigned long {
-    DEBUG_LN("Loading NEXT into buffer");
+    log_d("Loading NEXT into buffer");
     return load_into_buffer(next_buffer, next_place);
 }
