@@ -6,40 +6,40 @@
 
 class Renderer {
 public:
-    Renderer(OpticsSystem *optic_input, DisplaySystem *display_input);
+    Renderer(OpticsSystem *opticInput, DisplaySystem *displayInput);
 
-    void render_max_box();
-    void render_max_box_with_text(const String &text);
+    void renderMaxBox();
+    void renderMaxBoxWithText(const String &text);
 
-    void render_max_box_with_word(const String &word);
+    void renderMaxBoxWithWord(const String &word);
 
-    void render_box(int x_start, int y_start, int x_end, int y_end);
+    void renderBox(int xStart, int yStart, int xEnd, int yEnd);
 
-    auto get_previous_place() -> unsigned long;
+    auto getPreviousPlace() -> unsigned long;
 
-    auto get_display() -> DisplaySystem * { return display; }
+    auto getDisplay() -> DisplaySystem * { return display_; }
 
-    auto get_pixel_width() -> int { return max_pixels_x; }
-    auto get_pixel_height() -> int { return max_pixels_y; }
+    auto getPixelWidth() -> int { return maxPixelsX_; }
+    auto getPixelHeight() -> int { return maxPixelsY_; }
 
-    int local_x_offset = 0;
-    int local_y_offset = 0;
+    int localXOffset = 0;
+    int localYOffset = 0;
 
 protected:
-    OpticsSystem *optic;
-    DisplaySystem *display;
+    OpticsSystem *optic_;
+    DisplaySystem *display_;
 
-    void compute_min_max();
-    void compute_max_lines();
+    void computeMinMax();
+    void computeMaxLines();
 
-    int x_min = 0;
-    int x_max = 0;
-    int y_min = 0;
-    int y_max = 0;
-    int max_pixels_x = 0;
-    int max_pixels_y = 0;
+    int xMin_ = 0;
+    int xMax_ = 0;
+    int yMin_ = 0;
+    int yMax_ = 0;
+    int maxPixelsX_ = 0;
+    int maxPixelsY_ = 0;
 
-    int max_lines = 0;
+    int maxLines_ = 0;
 };
 
 #endif

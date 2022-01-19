@@ -12,54 +12,54 @@
 
 class FileRenderer : public Renderer {
 public:
-    FileRenderer(OpticsSystem *optic_input, DisplaySystem *display_input, Readable &readable_input);
+    FileRenderer(OpticsSystem *opticInput, DisplaySystem *displayInput, Readable &readableInput);
 
-    void set_read_mode(int new_mode);
-    auto get_read_mode() -> int;
-    void flip_read_mode();
+    void setReadMode(int newMode);
+    auto getReadMode() -> int;
+    void flipReadMode();
 
-    void increase_speed();
-    void decrease_speed();
-    void set_speed(int new_speed);
+    void increaseSpeed();
+    void decreaseSpeed();
+    void setSpeed(int newSpeed);
 
-    auto get_previous_place() -> unsigned long;
+    auto getPreviousPlace() -> unsigned long;
 
     // Always call this on each loop.
     // If not screed, it'll be a nop
-    auto render_continue_screed() -> unsigned long;
+    auto renderContinueScreed() -> unsigned long;
 
     // Render a page of text with the current place
     // returns the next place for reading so the calling function can
     // track place.
-    auto render_page_with_box(unsigned long place_in_file) -> unsigned long;
+    auto renderPageWithBox(unsigned long placeInFile) -> unsigned long;
 
-    auto go_backwards_one_page(unsigned long place) -> unsigned long;
+    auto goBackwardsOnePage(unsigned long place) -> unsigned long;
 
 protected:
-    unsigned long screed_last_time;
+    unsigned long screedLastTime_;
 
-    int screed_speed;
+    int screedSpeed_;
 
-    int read_mode;
+    int readMode_;
 
-    File file_handle;
+    File fileHandle_;
 
-    unsigned long current_place = 0;
-    unsigned long previous_place = 0;
-    unsigned long next_place = 0;
-    int first_go_around = 1;
+    unsigned long currentPlace_ = 0;
+    unsigned long previousPlace_ = 0;
+    unsigned long nextPlace_ = 0;
+    int firstGoAround_ = 1;
 
-    char prev_buffer[MAX_CHARS_PER_PAGE];
-    char curr_buffer[MAX_CHARS_PER_PAGE];
-    char next_buffer[MAX_CHARS_PER_PAGE];
+    char prevBuffer_[MAX_CHARS_PER_PAGE];
+    char currBuffer_[MAX_CHARS_PER_PAGE];
+    char nextBuffer_[MAX_CHARS_PER_PAGE];
 
-    auto load_prev_into_buffer() -> unsigned long;
-    auto load_curr_into_buffer() -> unsigned long;
-    auto load_next_into_buffer() -> unsigned long;
+    auto loadPrevIntoBuffer() -> unsigned long;
+    auto loadCurrIntoBuffer() -> unsigned long;
+    auto loadNextIntoBuffer() -> unsigned long;
 
     // This does the work of lineify from the old system. Loads one page of
     // text into that buffer given the current offset in the file
-    auto load_into_buffer(char *buffer, unsigned long place) -> unsigned long;
+    auto loadIntoBuffer(char *buffer, unsigned long place) -> unsigned long;
 };
 
 #endif

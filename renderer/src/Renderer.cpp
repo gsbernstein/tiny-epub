@@ -4,67 +4,67 @@
 
 #include "sindarin-debug.h"
 
-Renderer::Renderer(OpticsSystem *optic_input, DisplaySystem *display_input) {
-    optic = optic_input;
-    display = display_input;
-    compute_min_max();
+Renderer::Renderer(OpticsSystem *opticInput, DisplaySystem *displayInput) {
+    optic_ = opticInput;
+    display_ = displayInput;
+    computeMinMax();
 }
 
-void Renderer::compute_min_max() {
-    int midpoint_x;
-    int midpoint_y;
+void Renderer::computeMinMax() {
+    int midpointX;
+    int midpointY;
     // pixels per mm
-    float pixel_pitch_x;
-    float pixel_pitch_y;
+    float pixelPitchX;
+    float pixelPitchY;
 
     log_d("Computing Min and Max pixels for Renderer");
 
-    midpoint_x = display->get_x() / 2;
-    midpoint_y = display->get_y() / 2;
+    midpointX = display_->getX() / 2;
+    midpointY = display_->getY() / 2;
 
-    log_d("midpoint = (%d, %d)", midpoint_x, midpoint_y);
+    log_d("midpoint = (%d, %d)", midpointX, midpointY);
 
-    pixel_pitch_x = ((float)display->get_x()) / display->get_width();
-    pixel_pitch_y = ((float)display->get_y()) / display->get_height();
+    pixelPitchX = ((float)display_->getX()) / display_->getWidth();
+    pixelPitchY = ((float)display_->getY()) / display_->getHeight();
 
-    log_d("pixel pitch = (%d, %d)", pixel_pitch_x, pixel_pitch_y);
+    log_d("pixel pitch = (%d, %d)", pixelPitchX, pixelPitchY);
 
     // rounding down is ok here and what we want.
-    max_pixels_x = (int)(optic->get_x_mm() * pixel_pitch_x);
-    max_pixels_y = (int)(optic->get_y_mm() * pixel_pitch_y);
+    maxPixelsX_ = (int)(optic_->getXMm() * pixelPitchX);
+    maxPixelsY_ = (int)(optic_->getYMm() * pixelPitchY);
 
-    log_d("max pixels = (%d, %d)", max_pixels_x, max_pixels_y);
+    log_d("max pixels = (%d, %d)", maxPixelsX_, maxPixelsY_);
 
-    x_min = midpoint_x - max_pixels_x / 2;
-    x_max = midpoint_x + max_pixels_x / 2;
-    y_min = midpoint_y - max_pixels_y / 2;
-    y_max = midpoint_y + max_pixels_y / 2;
+    xMin_ = midpointX - maxPixelsX_ / 2;
+    xMax_ = midpointX + maxPixelsX_ / 2;
+    yMin_ = midpointY - maxPixelsY_ / 2;
+    yMax_ = midpointY + maxPixelsY_ / 2;
 
-    log_d("min = (%d, %d) max = (%d, %d)", x_min, y_min, x_max, y_max);
+    log_d("min = (%d, %d) max = (%d, %d)", xMin_, yMin_, xMax_, yMax_);
 }
 
 // Ask the display for the line height so we can set the max lines based
 // on our calcualtion.
 
-void Renderer::compute_max_lines() {}
+void Renderer::computeMaxLines() {}
 
-void Renderer::render_max_box() {
-    display->draw_box(x_min + local_x_offset, y_min + local_y_offset, x_max + local_x_offset,
-                      y_max + local_y_offset);
+void Renderer::renderMaxBox() {
+    display_->drawBox(xMin_ + localXOffset, yMin_ + localYOffset, xMax_ + localXOffset,
+                      yMax_ + localYOffset);
 }
 
-void Renderer::render_max_box_with_text(const String &text) {
-    display->draw_text_in_box(std::move(text), x_min + local_x_offset, y_min + local_y_offset,
-                              x_max + local_x_offset, y_max + local_y_offset);
+void Renderer::renderMaxBoxWithText(const String &text) {
+    display_->drawTextInBox(text, xMin_ + localXOffset, yMin_ + localYOffset, xMax_ + localXOffset,
+                            yMax_ + localYOffset);
 }
 
-void Renderer::render_max_box_with_word(const String &word) {
-    display->draw_big_word_in_box(std::move(word), x_min + local_x_offset, y_min + local_y_offset,
-                                  x_max + local_x_offset, y_max + local_y_offset);
+void Renderer::renderMaxBoxWithWord(const String &word) {
+    display_->drawBigWordInBox(word, xMin_ + localXOffset, yMin_ + localYOffset,
+                               xMax_ + localXOffset, yMax_ + localYOffset);
 }
 
-void Renderer::render_box(int x_start, int y_start, int x_end, int y_end) {
-    int startX = x_min + local_x_offset;
-    int startY = y_min + local_y_offset;
-    display->draw_box(startX + x_start, startY + y_start, startX + x_end, startY + y_end);
+void Renderer::renderBox(int xStart, int yStart, int xEnd, int yEnd) {
+    int startX = xMin_ + localXOffset;
+    int startY = yMin_ + localYOffset;
+    display_->drawBox(startX + xStart, startY + yStart, startX + xEnd, startY + yEnd);
 }
