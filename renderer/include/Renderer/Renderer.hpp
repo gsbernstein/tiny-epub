@@ -14,8 +14,11 @@ public:
     virtual auto read() -> int = 0;
     virtual auto seek(uint32_t pos) -> bool = 0;
     virtual auto position() -> size_t = 0;
+    virtual auto size() -> size_t = 0;
 
     auto getPreviousPlace() -> unsigned long;
+
+    auto getCurrentPlace() -> unsigned long;
 
     // Render a page of text with the current place
     // returns the next place for reading so the calling function can
@@ -23,6 +26,8 @@ public:
     auto renderPageWithBox(unsigned long placeInFile) -> unsigned long;
 
     auto goBackwardsOnePage(unsigned long place) -> unsigned long;
+
+    auto getDisplay() -> DisplaySystem * { return &display_; }
 
 protected:
     DisplaySystem &display_;
