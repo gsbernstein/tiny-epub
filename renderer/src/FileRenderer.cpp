@@ -5,9 +5,10 @@
 
 #define MAX_CHARS_PER_LINE 200
 
-FileRenderer::FileRenderer(DisplaySystem &display, Readable &readableInput) : Renderer(display) {
+FileRenderer::FileRenderer(DisplaySystem &display, Readable &readableInput, FileSystem &fileSystem)
+    : Renderer(display) {
     log_d("Attempting to open: %s", readableInput.path);
-    fileHandle_ = FileSystem::getInstance()->open(readableInput.path);
+    fileHandle_ = fileSystem.open(readableInput.path);
     if (!fileHandle_) {
         log_e("Failed to open file: %s is the filename", readableInput.path);
         return;
