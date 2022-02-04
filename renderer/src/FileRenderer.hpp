@@ -5,10 +5,11 @@
 
 #include "Contents/Readable.hpp"
 #include "Renderer.hpp"
+#include "Storage/FileSystem.hpp"
 
 class FileRenderer : public Renderer {
 public:
-    FileRenderer(DisplaySystem &display, Readable &readableInput);
+    FileRenderer(DisplaySystem &display, Readable &readableInput, FileSystem &fileSystem);
 
     auto available() -> int override { return fileHandle_.available(); }
     auto read() -> int override { return fileHandle_.read(); };

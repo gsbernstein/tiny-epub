@@ -181,7 +181,7 @@ auto Renderer::goBackwardsOnePage(unsigned long place) -> unsigned long {
                 //  start new line
                 buffer[prevSpace] = '\n';
                 // reset the line buffer by putting this last word (the word that didn't fit) in it.
-                strcpy(singleLine, &(buffer[prevSpace + 1]));
+                strncpy(singleLine, &(buffer[prevSpace + 1]), sizeof(singleLine));
                 // DEBUG_LN("Saw new line and wrapped this word: ");
                 // DEBUG_LN(single_line);
 
@@ -314,7 +314,7 @@ auto Renderer::loadIntoBuffer(char *buffer, unsigned long place) -> unsigned lon
                 //  start new line
                 buffer[prevSpace] = '\n';
                 // reset the line buffer by putting this last word (the word that didn't fit) in it.
-                strcpy(singleLine, &(buffer[prevSpace + 1]));
+                strncpy(singleLine, &(buffer[prevSpace + 1]), sizeof(singleLine));
                 // DEBUG_LN("Saw new line and wrapped this word: ");
                 // DEBUG_LN(single_line);
 
