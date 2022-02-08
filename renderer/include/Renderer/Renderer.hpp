@@ -1,8 +1,6 @@
 #ifndef RENDERER_H
 #define RENDERER_H
 
-#include <Arduino.h>
-
 #include "Displays/DisplaySystem.hpp"
 
 #define MAX_CHARS_PER_PAGE 1500

@@ -174,16 +174,12 @@ auto Renderer::goBackwardsOnePage(unsigned long place) -> unsigned long {
         if (buffer[plcInBuffer] == ' ') {
             // Check the length of the buffer
             pixLen = display_.getTextWidth(singleLine);
-            // DEBUG_LN("Checked a width after a thing");
-            // DEBUG_LN(buffer);
             if (pixLen > maxWidth) {
                 // rewind to last word and cut it off there.
                 //  start new line
                 buffer[prevSpace] = '\n';
                 // reset the line buffer by putting this last word (the word that didn't fit) in it.
                 strncpy(singleLine, &(buffer[prevSpace + 1]), sizeof(singleLine));
-                // DEBUG_LN("Saw new line and wrapped this word: ");
-                // DEBUG_LN(single_line);
 
                 charsInLine = strlen(singleLine);
 
@@ -198,12 +194,6 @@ auto Renderer::goBackwardsOnePage(unsigned long place) -> unsigned long {
                     totalCharsRead = prevSeekPos;
                     nextPlace_ = prevSeekPos;
                     buffer[prevSpace - charsInLine] = '\0';
-                    // DEBUG_LN(buffer);
-                    // DEBUG_LN("SEE ABOVE FOR BUFFER");
-                    // DEBUG_VAR(place);
-                    // DEBUG_LN(" is the place");
-                    // DEBUG_VAR(total_chars_read);
-                    // DEBUG_LN(" are the total chars read");
                     break;
                 }
             } else {
@@ -307,16 +297,12 @@ auto Renderer::loadIntoBuffer(char *buffer, unsigned long place) -> unsigned lon
         if (buffer[plcInBuffer] == ' ') {
             // Check the length of the buffer
             pixLen = this->display_.getTextWidth(singleLine);
-            // DEBUG_LN("Checked a width after a thing");
-            // DEBUG_LN(buffer);
             if (pixLen > maxWidth) {
                 // rewind to last word and cut it off there.
                 //  start new line
                 buffer[prevSpace] = '\n';
                 // reset the line buffer by putting this last word (the word that didn't fit) in it.
                 strncpy(singleLine, &(buffer[prevSpace + 1]), sizeof(singleLine));
-                // DEBUG_LN("Saw new line and wrapped this word: ");
-                // DEBUG_LN(single_line);
 
                 charsInLine = strlen(singleLine);
 
@@ -331,8 +317,6 @@ auto Renderer::loadIntoBuffer(char *buffer, unsigned long place) -> unsigned lon
                     this->seek(prevSeekPos);
                     this->nextPlace_ = prevSeekPos;
                     buffer[prevSpace - charsInLine] = '\0';
-                    // DEBUG_LN(buffer);
-                    // DEBUG_LN("SEE ABOVE FOR BUFFER");
                     break;
                 }
             } else {
