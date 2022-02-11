@@ -2,6 +2,7 @@
 
 #include <utility>
 
+#include "Misc/Platform.hpp"
 #include "sindarin-debug.h"
 
 Renderer::Renderer(DisplaySystem &display) : display_(display) {}
@@ -39,16 +40,27 @@ auto Renderer::getCurrentPlace() -> unsigned long { return currentPlace_; }
 // and load the next page into the next buffer so we have it.
 auto Renderer::renderPageWithBox(unsigned long placeInFile) -> unsigned long {
     unsigned long nextPos = 0;
+    SetCpuSpeedMhz(CPU_FREQ_MHZ_HIGH);
 
     log_i("%lu is place in file being requested", placeInFile);
     currentPlace_ = placeInFile;
+    PROFILE_START(loadCurrIntoBuffer);
     nextPlace_ = loadCurrIntoBuffer();
+    PROFILE_END_LOG(loadCurrIntoBuffer);
+
     display_.renderMaxBoxWithText(currBuffer_);
+    SetCpuSpeedMhz(CPU_FREQ_MHZ_LOW);
+
     nextPos = nextPlace_;
+    PROFILE_START(loadNextIntoBuffer);
     loadNextIntoBuffer();
+    PROFILE_END_LOG(loadNextIntoBuffer);
+
+    PROFILE_START(loadPrevIntoBuffer);
     previousPlace_ = goBackwardsOnePage(currentPlace_);
     loadPrevIntoBuffer();
-    log_d("finished loading previous -- now loading next");
+    PROFILE_END_LOG(loadPrevIntoBuffer);
+
     nextPlace_ = nextPos;
     return nextPos;
 }
@@ -344,16 +356,13 @@ auto Renderer::loadIntoBuffer(char *buffer, unsigned long place) -> unsigned lon
 }
 
 auto Renderer::loadPrevIntoBuffer() -> unsigned long {
-    log_d("Loading PREV into buffer");
     return loadIntoBuffer(prevBuffer_, previousPlace_);
 }
 
 auto Renderer::loadCurrIntoBuffer() -> unsigned long {
-    log_d("Loading CURR into buffer");
     return loadIntoBuffer(currBuffer_, currentPlace_);
 }
 
 auto Renderer::loadNextIntoBuffer() -> unsigned long {
-    log_d("Loading NEXT into buffer");
     return loadIntoBuffer(nextBuffer_, nextPlace_);
 }
