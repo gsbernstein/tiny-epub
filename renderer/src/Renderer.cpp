@@ -46,7 +46,7 @@ auto Renderer::renderPageWithBox(unsigned long placeInFile) -> unsigned long {
     currentPlace_ = placeInFile;
     PROFILE_START(loadCurrIntoBuffer);
     nextPlace_ = loadCurrIntoBuffer();
-    PROFILE_END_LOG(loadCurrIntoBuffer);
+    PROFILE_END_LOG_MS(loadCurrIntoBuffer);
 
     display_.renderMaxBoxWithText(currBuffer_);
     SetCpuSpeedMhz(CPU_FREQ_MHZ_LOW);
@@ -54,12 +54,12 @@ auto Renderer::renderPageWithBox(unsigned long placeInFile) -> unsigned long {
     nextPos = nextPlace_;
     PROFILE_START(loadNextIntoBuffer);
     loadNextIntoBuffer();
-    PROFILE_END_LOG(loadNextIntoBuffer);
+    PROFILE_END_LOG_MS(loadNextIntoBuffer);
 
     PROFILE_START(loadPrevIntoBuffer);
     previousPlace_ = goBackwardsOnePage(currentPlace_);
     loadPrevIntoBuffer();
-    PROFILE_END_LOG(loadPrevIntoBuffer);
+    PROFILE_END_LOG_MS(loadPrevIntoBuffer);
 
     nextPlace_ = nextPos;
     return nextPos;
