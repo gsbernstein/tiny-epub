@@ -3,6 +3,7 @@
 #include <utility>
 
 #include "Misc/Platform.hpp"
+#include "config.h"
 #include "sindarin-debug.h"
 
 Renderer::Renderer(DisplaySystem &display) : display_(display) {}
