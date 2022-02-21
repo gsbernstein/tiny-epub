@@ -28,15 +28,6 @@ void Renderer::loaded() {
     nextPlace_ = oldNextPlace;
 }
 
-// Ask the display for the line height so we can set the max lines based
-// on our calcualtion.
-
-void Renderer::computeMaxLines() {}
-
-auto Renderer::getPreviousPlace() -> unsigned long { return previousPlace_; }
-
-auto Renderer::getCurrentPlace() -> unsigned long { return currentPlace_; }
-
 // Show the (already loaded into buffer) current page
 // and load the next page into the next buffer so we have it.
 auto Renderer::renderPage(unsigned long placeInFile) -> unsigned long {
