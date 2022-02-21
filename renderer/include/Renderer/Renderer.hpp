@@ -6,6 +6,9 @@
 #define MAX_CHARS_PER_PAGE 1500
 #define MAX_CHARS_PER_LINE 200
 
+typedef std::array<char, MAX_CHARS_PER_PAGE> PageBuffer;
+typedef std::array<char, MAX_CHARS_PER_LINE> LineBuffer;
+
 class Renderer {
 public:
     Renderer(DisplaySystem &display);
@@ -41,13 +44,13 @@ protected:
     auto loadNextIntoBuffer() -> unsigned long;
     auto goBackwardsOnePage(unsigned long place) -> unsigned long;
 
-    char prevBuffer_[MAX_CHARS_PER_PAGE];
-    char currBuffer_[MAX_CHARS_PER_PAGE];
-    char nextBuffer_[MAX_CHARS_PER_PAGE];
+    PageBuffer prevBuffer_{};
+    PageBuffer currBuffer_{};
+    PageBuffer nextBuffer_{};
 
     // This does the work of lineify from the old system. Loads one page of
     // text into that buffer given the current offset in the file
-    auto loadIntoBuffer(char *buffer, unsigned long place) -> unsigned long;
+    auto loadIntoBuffer(PageBuffer &buffer, unsigned long place) -> unsigned long;
 };
 
 #endif

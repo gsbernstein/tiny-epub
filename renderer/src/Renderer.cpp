@@ -21,6 +21,7 @@ void Renderer::loaded() {
     // It's a little broken in that load_curr_into_buffer does the wrong thing and updates class
     // variables (essentially moving the current seek position in the file), hence this dance here
     // to make sure they are correct.
+    // TODO(john): It doesn't look like it works this way right now. Our preloading does nothing.
     loadPrevIntoBuffer();
     nextPlace_ = loadCurrIntoBuffer();
     int oldNextPlace = nextPlace_;
@@ -34,13 +35,14 @@ auto Renderer::renderPage(unsigned long placeInFile) -> unsigned long {
     unsigned long nextPos = 0;
     SetCpuSpeedMhz(CPU_FREQ_MHZ_HIGH);
 
+    // TODO: We're not taking advantage of the preloading work we do to load the next buffer
     log_i("%lu is place in file being requested", placeInFile);
     currentPlace_ = placeInFile;
     PROFILE_START(loadCurrIntoBuffer);
     nextPlace_ = loadCurrIntoBuffer();
     PROFILE_END_LOG_MS(loadCurrIntoBuffer);
 
-    display_.renderTextWithoutBox(currBuffer_);
+    display_.renderTextWithoutBox(currBuffer_.data());
     SetCpuSpeedMhz(CPU_FREQ_MHZ_LOW);
 
     nextPos = nextPlace_;
@@ -76,7 +78,7 @@ auto Renderer::renderPage(unsigned long placeInFile) -> unsigned long {
 auto Renderer::goBackwardsOnePage(unsigned long place) -> unsigned long {
 
     char curChar = '\0';
-    char mainBackwardsBuffer[MAX_CHARS_PER_PAGE + 1];
+    std::array<char, MAX_CHARS_PER_PAGE + 1> mainBackwardsBuffer;
     unsigned long seekPlace = 0;
     int numCharsToRead;
 
@@ -136,11 +138,12 @@ auto Renderer::goBackwardsOnePage(unsigned long place) -> unsigned long {
 
     curChar = '\0';
     unsigned int plcInBuffer = 0;
-    char buffer[MAX_CHARS_PER_PAGE];
+    PageBuffer buffer{};
 
     int linesInBuffer = 1;
     int pixLen = 0;
-    char singleLine[MAX_CHARS_PER_LINE];
+    LineBuffer singleLine{};
+
     int charsInLine = 0;
 
     // It's minus 4 because we want to start 2 off the top and not go below
@@ -182,17 +185,16 @@ auto Renderer::goBackwardsOnePage(unsigned long place) -> unsigned long {
         // Found a word break, do a check.
         if (buffer[plcInBuffer] == ' ') {
             // Check the length of the buffer
-            pixLen = display_.getTextWidth(singleLine);
+            pixLen = display_.getTextWidth(singleLine.data());
             if (pixLen > maxWidth) {
                 // rewind to last word and cut it off there.
                 //  start new line
                 buffer[prevSpace] = '\n';
                 // reset the line buffer by putting this last word (the word that didn't fit) in it.
-                strncpy(singleLine, &(buffer[prevSpace + 1]), sizeof(singleLine));
-
-                charsInLine = strlen(singleLine);
+                std::copy_n(buffer.begin() + prevSpace + 1, sizeof(singleLine), singleLine.begin());
 
                 // Update the prev_space to the current place.
+                charsInLine = strlen(singleLine.data());
                 prevSpace += charsInLine;
 
                 linesInBuffer++;
@@ -237,13 +239,11 @@ auto Renderer::goBackwardsOnePage(unsigned long place) -> unsigned long {
 }
 
 // returns the new place of the stream
-auto Renderer::loadIntoBuffer(char *buffer, unsigned long place) -> unsigned long {
-    char curChar = '\0';
+auto Renderer::loadIntoBuffer(PageBuffer &buffer, unsigned long place) -> unsigned long {
     unsigned int plcInBuffer = 0;
-    // int found_newline = 0;
     int linesInBuffer = 1;
     int pixLen = 0;
-    char singleLine[MAX_CHARS_PER_LINE];
+    std::array<char, MAX_CHARS_PER_LINE> singleLine{};
     int charsInLine = 0;
 
     // It's minus 4 because we want to start 2 off the top and not go below
@@ -252,11 +252,12 @@ auto Renderer::loadIntoBuffer(char *buffer, unsigned long place) -> unsigned lon
     int maxLines = (display_.maxPixelsY - 4) / this->display_.getTextHeight();
     int maxWidth = (display_.maxPixelsX - 4);
 
+    // Index of last word boundary
     int prevSpace = 0;
     unsigned long prevSeekPos = 0;
 
-    buffer[plcInBuffer] = curChar;
-    singleLine[charsInLine] = curChar;
+    buffer[plcInBuffer] = '\0';
+    singleLine[charsInLine] = '\0';
 
     if (!this->seek(place)) {
         log_e("failed to seek %lu is the place", place);
@@ -265,7 +266,7 @@ auto Renderer::loadIntoBuffer(char *buffer, unsigned long place) -> unsigned lon
     }
 
     while (this->available()) {
-        curChar = this->read();
+        auto curChar = this->read();
 
         // eliminate spaces at the beginning of the read
         // (This can happen due to heuristic to be able to go backwards arbitrarily)
@@ -304,22 +305,23 @@ auto Renderer::loadIntoBuffer(char *buffer, unsigned long place) -> unsigned lon
 
         // Found a word break, do a check.
         if (buffer[plcInBuffer] == ' ') {
-            // Check the length of the buffer
-            pixLen = this->display_.getTextWidth(singleLine);
+            // Check the length of the line
+            pixLen = this->display_.getTextWidth(singleLine.data());
             if (pixLen > maxWidth) {
                 // rewind to last word and cut it off there.
                 //  start new line
                 buffer[prevSpace] = '\n';
-                // reset the line buffer by putting this last word (the word that didn't fit) in it.
-                strncpy(singleLine, &(buffer[prevSpace + 1]), sizeof(singleLine));
 
-                charsInLine = strlen(singleLine);
+                // Reset the line buffer by putting this last word (the word that didn't fit) in it.
+                std::copy_n(buffer.begin() + prevSpace + 1, sizeof(singleLine), singleLine.begin());
 
                 // Update the prev_space to the current place.
+                charsInLine = strlen(singleLine.data());
                 prevSpace += charsInLine;
 
                 linesInBuffer++;
                 // we're done if this is true!
+                // Alternately could check if the last `getTextBounds` call exceeded the y
                 if (linesInBuffer > maxLines) {
                     // reset the file_handle to the end of this buffer so
                     // the next reads do the right thing.
@@ -336,7 +338,7 @@ auto Renderer::loadIntoBuffer(char *buffer, unsigned long place) -> unsigned lon
                 charsInLine++;
             }
         } else {
-            // keep going
+            // Keep looking for the next space
             charsInLine++;
         }
         plcInBuffer++;
