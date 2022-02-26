@@ -149,8 +149,8 @@ auto Renderer::goBackwardsOnePage(unsigned long place) -> unsigned long {
     // It's minus 4 because we want to start 2 off the top and not go below
     // 2 off the bottom due to the bounding box.
     // Note that get_text_height adds 1 over the max character height
-    int maxLines = (display_.maxPixelsY - 4) / display_.getTextHeight();
-    int maxWidth = (display_.maxPixelsX - 4);
+    int maxLines = (display_.height() - 4) / display_.getTextHeight();
+    int maxWidth = (display_.width() - 4);
 
     int prevSpace = 0;
     unsigned long prevSeekPos = 0;
@@ -249,8 +249,8 @@ auto Renderer::loadIntoBuffer(PageBuffer &buffer, unsigned long place) -> unsign
     // It's minus 4 because we want to start 2 off the top and not go below
     // 2 off the bottom due to the bounding box.
     // Note that get_text_height adds 1 over the max character height
-    int maxLines = (display_.maxPixelsY - 4) / this->display_.getTextHeight();
-    int maxWidth = (display_.maxPixelsX - 4);
+    int maxLines = (display_.height() - 4) / this->display_.getTextHeight();
+    int maxWidth = (display_.width() - 4);
 
     // Index of last word boundary
     int prevSpace = 0;
