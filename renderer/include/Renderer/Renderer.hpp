@@ -15,6 +15,8 @@ public:
     Renderer(DisplaySystem &display);
 
     void setStream(RendererStream *stream) { stream_ = stream; }
+    void setVerticalCenter(bool verticalCenter) { verticalCenter_ = verticalCenter; }
+    void setHorizontalCenter(bool horizontalCenter) { horizontalCenter_ = horizontalCenter; }
 
     auto getPreviousPlace() -> unsigned long { return previousPlace_; }
     auto getCurrentPlace() -> unsigned long { return currentPlace_; }
@@ -31,6 +33,10 @@ public:
 protected:
     DisplaySystem &display_;
     RendererStream *stream_ = nullptr;
+
+    // Allows you to center the text horizontally and vertically if you'd like
+    bool verticalCenter_ = false;
+    bool horizontalCenter_ = false;
 
     // This should be called by subclasses after content is loaded
     void loaded();
