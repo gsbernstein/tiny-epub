@@ -2,6 +2,7 @@
 
 #include <utility>
 
+#include "EPubPageMgr.hpp"
 #include "NullTokenizer.hpp"
 #include "Pager.hpp"
 #include "RendererDefs.hpp"
@@ -10,35 +11,42 @@
 
 using namespace renderer_defs;
 
-// ToDo: The renderer interface has been adjusted to consider a new upcoming Place struct.
-//       It is now using a Place as an uint32_t, independant of an renderer independant
-//       StreamPlace, to support it's development in the current Sol app that support only
-//       TXT files.
-//       Will need to be adjusted considering the upcoming Place definition...
-
 class Renderer {
 
 public:
     Renderer(DisplaySystem &display)
         : display_(display), tokens_(display), pager_(tokens_, display) {
         // log_w("constructor...");
-        tokenizer_ = std::make_shared<NullTokenizer>(display);
+        tokenizer_ = std::make_shared<NullTokenizer>(display, tokens_, pager_);
     }
 
-    auto setStream(std::shared_ptr<RendererStream> stream) -> void {
+    auto setStream(const std::shared_ptr<RendererStream> &stream) -> void {
         // log_w("setStream...");
-        tokenizer_ = Tokenizer::factory(std::move(stream), display_);
-        pager_.clear();
+        tokenizer_ = Tokenizer::factory(stream, display_, tokens_, pager_);
     }
-    auto setCurrentPlace(Place newPlace) -> void {
+
+    [[nodiscard]] inline auto getStream() -> std::shared_ptr<RendererStream> {
+        return tokenizer_->getStream();
+    }
+
+    auto setCurrentPlace(std::shared_ptr<Place> newPlace) -> void {
         // log_w("setCurrentPlace...");
-        currentPlace_ = tokenizer_->toStreamPlace(newPlace);
+        currentPlace_ = tokenizer_->toStreamPlace(std::move(newPlace));
     }
 
-    [[nodiscard]] auto getPreviousPlace() -> Place;
+    [[nodiscard]] auto getStreamPlace(std::shared_ptr<Place> place) -> StreamPlace {
+        // log_w("setCurrentPlace...");
+        return tokenizer_->toStreamPlace(std::move(place));
+    }
 
-    [[nodiscard]] inline auto getCurrentPlace() const -> Place {
+    [[nodiscard]] auto getPreviousPlace() -> std::shared_ptr<Place>;
+
+    [[nodiscard]] inline auto getCurrentPlace() const -> std::shared_ptr<Place> {
         return tokenizer_->toPlace(currentPlace_);
+    }
+
+    [[nodiscard]] inline auto getTxtOffset() const -> uint32_t {
+        return tokenizer_->getTxtOffset();
     }
 
     [[nodiscard]] inline auto size() const -> uint32_t { return tokenizer_->streamSize(); }
@@ -51,12 +59,19 @@ public:
     // for the speed reading functionality.
 
     // NOLINTNEXTLINE(modernize-use-nodiscard)
-    auto renderPage(Place fromPlace, int16_t numSkipLines = 0, bool forceRefresh = false) -> Place;
+    auto renderPage(std::shared_ptr<Place> fromPlace, int16_t numSkipLines = 0,
+                    bool forceRefresh = false) -> std::pair<std::shared_ptr<Place>, uint8_t>;
+
+    void showStats() {
+        log_w("Circular buffer max lenghts: Tokens: %" PRIu16 ", CStrPool: %" PRIu16,
+              tokens_.getMaxTokensCount(), tokens_.getMaxCStrPoolCount());
+    }
 
     // NOLINTNEXTLINE(modernize-use-nodiscard)
-    inline auto renderFirstPage(int16_t numSkipLines = 0) -> Place {
+    inline auto renderFirstPage(int16_t numSkipLines = 0, bool forceRefresh = false)
+        -> std::pair<std::shared_ptr<Place>, bool> {
         return renderPage(tokenizer_->toPlace(tokenizer_->getPlaceAtBeginningOfDocument()),
-                          numSkipLines);
+                          numSkipLines, forceRefresh);
     }
 
     [[nodiscard]] inline auto getTotalLengthOfLines() const -> uint16_t {
@@ -68,22 +83,26 @@ public:
     }
 
     [[nodiscard]] inline auto getNumRenderedLines() const -> uint16_t {
-        return pager_.getLineCount();
+        return pager_.getPageLineCount();
     }
 
     [[nodiscard]] inline auto getCurrentPageWordCount() const -> uint16_t {
         return pager_.getWordCount();
     }
 
+    [[nodiscard]] inline auto atEndOfFile() const -> bool { return pager_.atEndOfFile(); }
+
 private:
     DisplaySystem &display_;
     Tokens tokens_;
     Pager pager_;
+    EPubPageMgr pageMgr_;
+
     std::shared_ptr<Tokenizer> tokenizer_{nullptr};
 
     StreamPlace currentPlace_{};
     StreamPlace previousPlace_{};
     StreamPlace nextPlace_{};
 
-    auto goBackwardsOnePage(StreamPlace fromPlace) -> StreamPlace;
+    auto goBackwardsOnePage(StreamPlace endPlace) -> StreamPlace;
 };

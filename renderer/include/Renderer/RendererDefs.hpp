@@ -3,6 +3,7 @@
 #include <utility>
 
 #include "Displays/DisplaySystem.hpp"
+#include "Misc/BMPImage.hpp"
 #include "Misc/Platform.hpp"
 #include "Models/Place.hpp"
 #include "config.h"
@@ -10,10 +11,58 @@
 
 namespace renderer_defs {
 
-// For deep logging when changing this file
-static constexpr bool RENDERER_DEBUG = false;
-static constexpr bool RENDERER_CHRONO = false;
-static constexpr bool ON_ERROR_EXIT = false;
+// The following defines are helpers for code development
+// That is specific to the renderer
+
+#define REND_DEBUGGING 0     // Show debugging messages where appropriate
+#define REND_EXIT_ON_ERROR 0 // Simulator Only!!
+#define REND_PROFILING 0     // Speed measurements
+#define REND_STATISTICS 0    // Stats on Tokens size and Lines size
+
+#if !SIMULATOR
+#undef REND_EXIT_ON_ERROR // To be sure there will be no exit() call on the Sol device
+#endif
+
+#if REND_EXIT_ON_ERROR
+static constexpr bool REND_ON_ERROR_EXIT = true;
+#define REND_EXIT_SIM exit(1)
+#define REND_ELOG(f, ...)                                                                          \
+    {                                                                                              \
+        log_e(f, ##__VA_ARGS__);                                                                   \
+        exit(1);                                                                                   \
+    }
+#else
+static constexpr bool REND_ON_ERROR_EXIT = false;
+#define REND_EXIT_SIM
+#endif
+
+#if REND_DEBUGGING
+static constexpr bool REND_DEBUG = true;
+#define REND_WLOG(f, ...) log_w(f, ##__VA_ARGS__);
+#ifndef REND_ELOG
+#define REND_ELOG(f, ...) log_e(f, ##__VA_ARGS__);
+#endif
+#else
+static constexpr bool REND_DEBUG = false;
+#define REND_WLOG(...)
+#ifndef REND_ELOG
+#define REND_ELOG(...)
+#endif
+#endif
+
+#if REND_PROFILING
+#define REND_PROFILE_START(v) PROFILE_START(v)
+#define REND_PROFILE_END(v) PROFILE_END_LOG_MS(v)
+#else
+#define REND_PROFILE_START(v)
+#define REND_PROFILE_END(v)
+#endif
+
+#if REND_STATISTICS
+static constexpr bool REND_STATS = true;
+#else
+static constexpr bool REND_STATS = false;
+#endif
 
 // Used by the Tokenizer::getFileLocation() method in case of error
 static constexpr uint32_t LOCATION_ERROR = 0xFFFFFFFF;
@@ -21,26 +70,29 @@ static constexpr uint32_t LOCATION_ERROR = 0xFFFFFFFF;
 // This is the number of SUB-lines we want to split a line into to be able to render bare
 // newlines as less than a full line height of the text. (Deci was chosen as 1/10) So what the
 // two lines below mean is that a new line by itself on a line will render as 4/10s of a full
-// line height. Theoretically we can do any percent       age we want here, but there is a lot of
+// line height. Theoretically we can do any percentage we want here, but there is a lot of
 // testing to do for that!
 
 static constexpr uint16_t NEWLINE_DECI_LINE_HEIGHT = 10;
 static constexpr uint16_t ENDPARAGRAPH_DECI_LINE_HEIGHT = 4;
+static constexpr uint16_t HRULE_DECI_LINE_HEIGHT = 4;
 
 // A Page array must be large enough to accommodate the need to load a complete display page,
 // but also able to load a complete paragraph that can precede the page when the back page
 // command is issued by the user. By design a paragraph cannot have more than 1500 bytes,
 // followed by a NEWLINE, an ENDOFPARAGRAPH, and a null.
 
-static constexpr uint16_t MAX_BYTES_PER_PARAGRAPH = /* 10003; */ 1503;
+static constexpr uint16_t MAX_BYTES_PER_PARAGRAPH = 5003; // 1503;
 static constexpr uint16_t MAX_BYTES_PER_DISPLAY_PAGE = 2400;
 static constexpr uint16_t MAX_BYTES_TO_RETRIEVE =
     (MAX_BYTES_PER_PARAGRAPH + MAX_BYTES_PER_DISPLAY_PAGE);
-static constexpr uint16_t POOL_BUFFER_SIZE = (MAX_BYTES_PER_PARAGRAPH + MAX_BYTES_PER_DISPLAY_PAGE);
-static constexpr uint16_t MAX_TOKEN_COUNT = POOL_BUFFER_SIZE;
+static constexpr uint16_t CSTR_POOL_SIZE = 2000;
+static constexpr uint16_t TOKENS_SIZE = 500;
 static constexpr uint16_t MAX_BYTES_PER_LINE = 200;
-static constexpr uint16_t MAX_LINES_PER_PAGE = 200;
+static constexpr uint16_t LINES_SIZE = 36;
+static constexpr uint16_t PAGE_INDEX_SIZE = 500;
 
+static constexpr uint32_t END_OFFSET = 999999999U;
 // NOTE:
 //
 // In the renderer class definitions:
@@ -50,41 +102,76 @@ static constexpr uint16_t MAX_LINES_PER_PAGE = 200;
 
 using Idx = uint16_t;
 
-// These are the different tokens so as we parse a buffer
-// we more easily know what to do with the text.
-enum class TokenId : uint8_t {
-    TEXT = 0,
-    NEWLINE,
-    ENDPARAGRAPH,
-    SPACE,
-    HYPHEN,
-    ENDASH,
-    EMDASH,
-    TAB,
-    PICTURE,
-    NOTOKEN
+// These are the different tokens so as we parse a buffer, we more easily know what to do with the
+// text. Bits are assigned to each such that they can be combined in a mask for comparisons.
+enum class TokenId : uint16_t {
+    TEXT = 1 << 0,    // Usually a word. Can contain &NBSP; and spaces characters for formatting
+    ITEXT = 1 << 1,   // Indent *next* lines using this token width
+    HTEXT = 1 << 2,   // Start of a <H1>..<h6> header tag
+    NTEXT = 1 << 3,   // Text that is *NOT* in the pool
+    NEWLINE = 1 << 4, // Full line vertical space. Break lines
+    ENDPARAGRAPH = 1 << 5, // After paragraph vertical space
+    HYPHEN = 1 << 6,       // ASCII hyphen "-"
+    ENDASH = 1 << 7,       // Unicode En Dash (U+2013) "–"
+    EMDASH = 1 << 8,       // Unicode Em Dash (U+2014) "—"
+    PICTURE = 1 << 9,      // Whole screen picture
+    EPICTURE =
+        1 << 10,      // Embedded in page picture (between paragraphs) More than one can be present
+    HRULE = 1 << 11,  // Horizontal line
+    BTABLE = 1 << 12, // Beginning of a table
+    ETABLE = 1 << 13  // End of table
 };
 
-#pragma pack(push, 1)
-struct StreamPlace {
-    uint32_t offset;
-    uint16_t fileNumber;
+#if REND_DEBUGGING
+static const char *TokenIdStr[] = {"TEXT",    "ITEXT",        "HTEXT",    "NTEXT",
+                                   "NEWLINE", "ENDPARAGRAPH", "HYPHEN",   "ENDASH",
+                                   "EMDASH",  "PICTURE",      "EPICTURE", "HRULE"};
+#endif
 
-    auto operator==(const StreamPlace &rhs) const -> bool {
-        return (offset == rhs.offset) && (fileNumber == rhs.fileNumber);
+// BitMask of all token ids that are using the pool space
+static const uint16_t POOL_TOKENS = (uint16_t)TokenId::TEXT | (uint16_t)TokenId::ITEXT |
+                                    (uint16_t)TokenId::HTEXT | (uint16_t)TokenId::PICTURE |
+                                    (uint16_t)TokenId::EPICTURE;
+#pragma pack(push, 1)
+
+class StreamPlace {
+public:
+    StreamPlace(uint32_t offset, Idx fileIdx) : offset_(offset), fileIdx_(fileIdx) {}
+    StreamPlace() : offset_(0), fileIdx_(0) {}
+
+    inline void setOffset(uint32_t offset) { offset_ = offset; }
+    inline void incOffset() { offset_ += 1; }
+    inline void decOffset() {
+        if (offset_ > 0) {
+            offset_ -= 1;
+        }
+    }
+    [[nodiscard]] inline auto getOffset() const -> uint32_t { return offset_; }
+    [[nodiscard]] inline auto getFileIdx() const -> Idx { return fileIdx_; }
+
+    [[nodiscard]] inline auto operator==(const StreamPlace &rhs) const -> bool {
+        return (offset_ == rhs.offset_) && (fileIdx_ == rhs.fileIdx_);
+    }
+
+    [[nodiscard]] inline auto operator>=(const StreamPlace &rhs) const -> bool {
+        return (fileIdx_ > rhs.fileIdx_) ||
+               ((fileIdx_ == rhs.fileIdx_) && (offset_ >= rhs.offset_));
     }
 
     [[nodiscard]] auto str() const -> std::string {
         std::string s;
         s = "[offset:";
-        s += std::to_string(offset);
-        s.append(", fileNbr:");
-        s += std::to_string(fileNumber);
+        s += std::to_string(offset_);
+        s.append(", fileIdx:");
+        s += std::to_string(fileIdx_);
         s.append("]");
         return s;
     }
+
+private:
+    uint32_t offset_;
+    Idx fileIdx_;
 };
-#pragma pack(pop)
 
 // A token is simply a place in the buffer and a token identifer
 // that indicates what type of token it is.
@@ -99,24 +186,30 @@ struct Token {
     // start is for where it's located. It's useful for looking backwards
     // while rendering a back page command.
     const char *cStr;
+    std::shared_ptr<BMPImage> picture;
     StreamPlace streamPlace;
-    Idx prevNewParagraphTokenIdx;
-    uint16_t width;
-    uint16_t height;
-    uint16_t length; // Length in bytes
+    uint16_t pixWidth;  // Width in pixels. Used with pictures and text tokens
+    uint16_t pixHeight; // Height in pixels. Used with pictures tokens
+    uint16_t length;    // Length in bytes
     TokenId tokenId;
+    uint8_t spacesAfter;
 };
 
-struct LineStruct {
+struct LineInfo {
     Idx tokenIdx;
     uint16_t tokenCount;
-    uint16_t length; // String length
+    uint16_t length;     // String length
+    uint16_t deciHeight; // Height in decilines
+    uint16_t leftIndent; // Line Left Indentation
 };
+#pragma pack(pop)
 
-using TokensArray = std::array<Token, MAX_TOKEN_COUNT>;
-using CStrPool = std::array<char, POOL_BUFFER_SIZE + 1>;
+using TokensArray = std::array<Token, TOKENS_SIZE>;
+using CStrPool = std::array<char, CSTR_POOL_SIZE>;
 
 using Line = std::array<char, MAX_BYTES_PER_LINE>;
-using Lines = std::array<LineStruct, MAX_LINES_PER_PAGE>;
+using Lines = std::array<LineInfo, LINES_SIZE>;
+
+using PageIndex = std::array<uint32_t, PAGE_INDEX_SIZE>;
 
 } // namespace renderer_defs

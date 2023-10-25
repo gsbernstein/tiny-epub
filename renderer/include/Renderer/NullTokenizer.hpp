@@ -1,50 +1,52 @@
 #pragma once
 
+#include "Models/DocType.hpp"
 #include "Tokenizer.hpp"
 
 class NullTokenizer : public Tokenizer {
 
 public:
-    NullTokenizer(DisplaySystem &display) : Tokenizer(display) {}
-
+    NullTokenizer(DisplaySystem &display, Tokens &tokens, Pager &pager)
+        : Tokenizer(display, tokens, pager) {}
     ~NullTokenizer() override = default;
 
-    [[nodiscard]] auto loadAndTokenizePage(StreamPlace fromPlace, Tokens &tokens, Pager &pager,
-                                           bool backwards = false, StreamPlace *toPlace = nullptr)
-        -> StreamPlace override {
+    [[nodiscard]] auto loadAndTokenizePage(StreamPlace fromPlace, bool backwards = false,
+                                           StreamPlace *toPlace = nullptr)
+        -> std::pair<StreamPlace, StreamPlace> override {
         error();
-        return StreamPlace{.offset = 0, .fileNumber = 0};
+        return {};
     };
-
-    [[nodiscard]] auto getPlaceAfterEndOfFileReached(StreamPlace streamPlace) const
-        -> StreamPlace override {
-        error();
-        streamPlace.offset = 0;
-        return streamPlace;
-    }
 
     // ToDo: To be adjusted related to the upcoming Place definition
-    [[nodiscard]] auto toStreamPlace(const Place &place) const -> StreamPlace override {
+    [[nodiscard]] auto toStreamPlace(const std::shared_ptr<Place> place) const
+        -> StreamPlace override {
         error();
-        return StreamPlace{.offset = place, .fileNumber = 0};
+        return {};
     }
 
-    [[nodiscard]] inline auto toPlace(const StreamPlace &streamPlace) const -> Place override {
+    [[nodiscard]] inline auto toPlace(const StreamPlace &streamPlace) const
+        -> std::shared_ptr<Place> override {
         error();
-        return streamPlace.offset;
+        return std::make_shared<NonePlace>();
     }
 
-protected:
-    auto getFileLocation(StreamPlace fromPlace) -> StreamPlace override {
+    [[nodiscard]] auto streamSize() const -> size_t override {
         error();
-        return fromPlace;
-    };
+        return 0;
+    }
+
+    [[nodiscard]] auto isFor(DocType docType) const -> bool override {
+        error();
+        return false;
+    }
+
+    void setStream(std::shared_ptr<RendererStream> stream) override { error(); }
+
+    [[nodiscard]] auto getStream() -> std::shared_ptr<RendererStream> override { return nullptr; }
 
 private:
     void error() const {
-        log_e("There is no stream defined for the Rendere!!!");
-        if constexpr (ON_ERROR_EXIT) {
-            exit(1);
-        }
+        log_e("There is no stream defined for the Renderer");
+        REND_EXIT_SIM;
     }
 };

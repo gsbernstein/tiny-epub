@@ -1,74 +1,105 @@
+#pragma once
+
+#include <utility>
+
+#include "EPubDefs.hpp"
 #include "EPubOpf.hpp"
-#include "Misc/ZipFile.hpp"
+#include "Misc/SpiramAllocator.hpp"
+#include "Misc/Unzipper.hpp"
+#include "Models/DocType.hpp"
 #include "Renderers/RendererStream.hpp"
+#include "pugixml.hpp"
 
 class EPubFile : public RendererStream {
 public:
-    EPubFile(FileSystem &fs, const char *filename) : epubZipFile_(fs, filename) {}
+    EPubFile(FileSystem &fs, const char *filename, std::shared_ptr<Readable> readable)
+        : RendererStream(DocType::EPUB), epubUnzipper_(fs, filename),
+          readable_(std::move(readable)), currentFileBuffer_(nullptr), currentFilePath_("") {
+        open();
+    }
     ~EPubFile() override { close(); };
+
+    [[nodiscard]] auto read() -> int override { return 0; }
+    [[nodiscard]] auto seek(uint32_t pos) -> bool override { return false; }
+    [[nodiscard]] auto position() -> size_t override { return 0; }
+    [[nodiscard]] auto size() -> size_t override { return 0; /* opf_->getTotalSize(); */ }
+
+    [[nodiscard]] auto isAnArticle() const -> bool { return readable_->isArticle(); }
+
+    // [[nodiscard]] inline auto getSpineIdxForOffset(uint32_t offset) const -> Idx {
+    //     return opf_->getSpineIdxForOffset(offset);
+    // }
+
+    [[nodiscard]] inline auto getSpine(Idx idx) const -> const EPubOpf::SpineItem & {
+        return opf_->getSpine(idx);
+    }
+
+    [[nodiscard]] auto findFileOffsetAtCharOffset(const std::string &path, uint32_t charOffset)
+        -> uint32_t;
+
+    [[nodiscard]] auto findCharOffsetAtFileOffset(const std::string &path, uint32_t fileOffset)
+        -> uint32_t;
+
+    [[nodiscard]] inline auto getSpineCount() const -> uint16_t { return opf_->getSpineCount(); }
+
+    [[nodiscard]] auto getFile(const std::string &path)
+        -> std::pair<std::shared_ptr<uint8_t[]>, uint32_t>;
+
+    [[nodiscard]] inline auto getToc() const -> ReadableTableOfContentsChapterVector {
+        return readable_->toc;
+    }
+
+    [[nodiscard]] inline auto getSpineIdx(const std::string &href) const -> uint16_t {
+        return opf_->getSpineIdx(href);
+    }
+
+    [[nodiscard]] auto getXHTMLFile(const std::string &path) -> pugi::xml_document &;
+
+    [[nodiscard]] inline auto getOffset(const pugi::char_t *item) const -> uint32_t {
+        return item - (pugi::char_t *)currentFileBuffer_.get();
+    }
+
+    [[nodiscard]] inline auto getFullPath(const std::string &filename) const -> std::string {
+        return opf_->getFullPath(filename);
+    }
+
+    [[nodiscard]] inline auto isOpen() const -> bool { return fileOpen_; }
+
+    [[nodiscard]] auto getRelativeFilePath(const std::string &filename, Idx spineIdx) const
+        -> std::string {
+        std::string mainFilePath = opf_->getFullPath(opf_->getSpine(spineIdx).item->href);
+        std::string path;
+        opf_->extractPath(mainFilePath.c_str(), path);
+        return path + filename;
+    }
+
+    [[nodiscard]] auto getUncompressedSize(Idx spineIdx) -> uint32_t {
+        std::string filePath = opf_->getFullPath(opf_->getSpine(spineIdx).item->href);
+        // log_w("Loading file %s", filePath.c_str());
+        if (epubUnzipper_.openFile(filePath.c_str())) {
+            uint32_t size = epubUnzipper_.getFileSize();
+            epubUnzipper_.closeFile();
+            return size;
+        }
+        return 0;
+    }
+
+    auto getReadableChapterIndex(const std::shared_ptr<EPubPlace> &ePubPlace) const -> int;
+
+private:
+    Unzipper epubUnzipper_;
+    const std::shared_ptr<Readable> readable_;
+
+    pugi::xml_document currentFileDoc_;
+
+    bool fileOpen_{false};
+
+    std::shared_ptr<EPubOpf> opf_{nullptr};
+
+    // std::unique_ptr<pugi::char_t[]> currentFileBuffer_;
+    std::shared_ptr<uint8_t[]> currentFileBuffer_;
+    std::string currentFilePath_;
 
     auto open() -> bool;
     void close();
-
-    // RendererStream overrides
-    auto readBytes(uint8_t *buf, int size) -> int override {
-        // While we have bytes to read, read them!
-        size_t len = epubZipFile_.readFromFile(buf, size);
-
-        if (len < size) {
-            epubZipFile_.closeFile();
-
-            currentXhtmlIndex_++;
-            // If there's another file to open
-            if (currentXhtmlIndex_ < xhtmlItems_.size()) {
-                // Open the next file
-                auto &item = xhtmlItems_[currentXhtmlIndex_];
-                log_d("Opening %s", item.fullPath().c_str());
-                epubZipFile_.openFile(item.fullPath().c_str());
-                // Read the bytes
-                size_t secondLen = epubZipFile_.readFromFile(buf + len, size - len);
-                len += secondLen;
-            } else {
-                log_i("No more files to read");
-            }
-        }
-
-        position_ += len;
-        // We're done!
-        return len;
-    };
-    // TODO: Maybe this could be the default implememtation of readBytes?
-    auto read() -> int override {
-        int out;
-        readBytes((uint8_t *)&out, 1);
-        return out;
-    };
-    auto seek(uint32_t pos) -> bool override {
-        if (pos < position_) {
-            log_w("Seeking backwards in ePub from %d to %" PRIu32 "", position_, pos);
-            position_ = 0;
-            currentXhtmlIndex_ = 0;
-            epubZipFile_.closeFile();
-            epubZipFile_.openFile(xhtmlItems_[0].fullPath().c_str());
-        }
-
-        // Seek forward to position
-        while (position_ < pos && position_ < contentLength_) {
-            // Read a byte at a time until we get to the position
-            read();
-        }
-        return true;
-    };
-    auto position() -> size_t override { return position_; };
-    auto size() -> size_t override { return contentLength_; };
-
-protected:
-    ZipFile epubZipFile_;
-
-    // Text content
-    std::vector<EPubData::ManifestItem> xhtmlItems_;
-
-    int contentLength_ = 0;
-    int position_ = 0;
-    int currentXhtmlIndex_ = 0;
 };

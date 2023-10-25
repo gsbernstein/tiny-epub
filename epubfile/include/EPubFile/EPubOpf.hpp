@@ -1,109 +1,55 @@
-#include <expat.h>
-#include <map>
+#pragma once
+
+#include <memory>
 #include <string>
+#include <unordered_map>
 #include <vector>
 
-#include "Misc/ZipFile.hpp"
-
-class EPubData {
-public:
-    struct ManifestItem {
-        std::string href;
-        std::string id;
-        std::string mediaType;
-        int uncompressedSize; // Must be loaded seprately
-        [[nodiscard]] auto fullPath() const -> std::string { return "OEBPS/" + href; }
-    };
-
-    std::string title;
-    std::string creator;
-    std::vector<ManifestItem> manifest;
-
-    // Don't love that these state things are here
-    bool parsingTitle = false;
-    bool parsingCreator = false;
-    bool parsingManifest = false;
-};
+#include "EPubDefs.hpp"
+#include "Models/Readable.hpp"
 
 class EPubOpf {
 public:
-    EPubOpf(ZipFile &zipFile, const char *path) : path_(path), zipFile_(zipFile) {}
+    EPubOpf(const char *path) : path_(path) {}
 
-    auto parse() -> EPubData {
-        EPubData data;
-        XML_Parser parser = XML_ParserCreate(nullptr);
-        XML_SetUserData(parser, &data);
-        XML_SetElementHandler(parser, startElementHandler, endElementHandler);
-        XML_SetCharacterDataHandler(parser, characterDataHandler);
+    void parse(const std::shared_ptr<uint8_t[]> &buffer, uint32_t length,
+               const std::shared_ptr<Readable> &readable);
 
-        if (zipFile_.openFile(path_) != UNZ_OK) {
-            log_e("Failed to open ePub manifest %s", path_);
-            return data;
-        }
+    struct ManifestItem {
+        std::string href;
+        std::string mediaType;
+    };
 
-        char buffer[1024];
-        int done;
-        do {
-            size_t len = zipFile_.readFromFile((uint8_t *)buffer, sizeof(buffer));
-            done = len < sizeof(buffer);
-            if (XML_Parse(parser, buffer, len, done) == XML_STATUS_ERROR) {
-                // Handle parse error
-                break;
-            }
-        } while (!done);
+    struct SpineItem {
+        ManifestItem *item;
+        int readableChapterIndex; // = -1 if not a chapter in the readable TOC
+    };
 
-        XML_ParserFree(parser);
-        if (zipFile_.closeFile() != UNZ_OK) {
-            log_e("Failed to close ePub manifest %s", path_);
-        }
+    [[nodiscard]] auto getSpine(Idx idx) const -> const SpineItem & { return spine_[idx]; }
 
-        return data;
+    [[nodiscard]] auto getFullPath(const std::string &fileName) const -> std::string {
+        return basePath_ + fileName;
     }
 
-protected:
+    [[nodiscard]] inline auto getSpineCount() const -> uint16_t { return spine_.size(); }
+
+    void extractPath(const char *fname, std::string &path);
+
+    auto getSpineIdx(const std::string &href) const -> int;
+
+    auto getReadableChapterIndex(const std::string &href) const -> int;
+
+private:
     const char *path_;
-    ZipFile &zipFile_;
 
-    static void XMLCALL startElementHandler(void *userData, const char *name, const char **attrs) {
-        auto *data = static_cast<EPubData *>(userData);
-        if (strcmp(name, "dc:title") == 0) {
-            data->parsingTitle = true;
-        } else if (strcmp(name, "dc:creator") == 0) {
-            data->parsingCreator = true;
-        } else if (strcmp(name, "manifest") == 0) {
-            data->parsingManifest = true;
-        } else if (data->parsingManifest && strcmp(name, "item") == 0) {
-            EPubData::ManifestItem item;
-            for (int i = 0; attrs[i]; i += 2) {
-                if (strcmp(attrs[i], "href") == 0) {
-                    item.href = attrs[i + 1];
-                } else if (strcmp(attrs[i], "id") == 0) {
-                    item.id = attrs[i + 1];
-                } else if (strcmp(attrs[i], "media-type") == 0) {
-                    item.mediaType = attrs[i + 1];
-                }
-            }
-            data->manifest.push_back(item);
-        }
-    }
+    std::string basePath_;
 
-    static void XMLCALL endElementHandler(void *userData, const char *name) {
-        auto *data = static_cast<EPubData *>(userData);
-        if (strcmp(name, "dc:title") == 0) {
-            data->parsingTitle = false;
-        } else if (strcmp(name, "dc:creator") == 0) {
-            data->parsingCreator = false;
-        } else if (strcmp(name, "manifest") == 0) {
-            data->parsingManifest = false;
-        }
-    }
+    using ManifestMap = std::unordered_map<std::string, ManifestItem>;
+    using ManifestIterator = std::unordered_map<std::string, ManifestItem>::iterator;
+    using SpineVector = std::vector<SpineItem>;
 
-    static void XMLCALL characterDataHandler(void *userData, const char *s, int len) {
-        auto *data = static_cast<EPubData *>(userData);
-        if (data->parsingTitle) {
-            data->title.append(s, len);
-        } else if (data->parsingCreator) {
-            data->creator.append(s, len);
-        }
-    }
+    std::string title_;
+    std::string creator_;
+    ManifestMap manifest_;
+    SpineVector spine_;
 };

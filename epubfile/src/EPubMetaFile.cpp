@@ -1,29 +1,22 @@
 #include "EPubMetaFile.hpp"
 
-void EPubMetaFile::parse() {
-    XML_Parser parser = XML_ParserCreate(nullptr);
-    XML_SetUserData(parser, &rootfilePaths);
-    XML_SetElementHandler(parser, startElementHandler, endElementHandler);
-    XML_SetCharacterDataHandler(parser, characterDataHandler);
+#include "pugixml.hpp"
 
-    if (zipFile_.openFile(path_) != UNZ_OK) {
-        log_e("Failed to open ePub manifest %s", path_);
-    }
+void EPubMetaFile::parse(const std::shared_ptr<uint8_t[]> &buffer, uint32_t length) {
 
-    char buffer[128];
-    int done;
-    do {
-        size_t len = zipFile_.readFromFile((uint8_t *)buffer, sizeof(buffer));
-        done = len < sizeof(buffer);
-        if (XML_Parse(parser, buffer, len, done) == XML_STATUS_ERROR) {
-            log_e("Parser error");
-            // Handle parse error
-            break;
+    pugi::xml_document doc;
+
+    EPUB_PROFILE_START(XMLParseManifest);
+    pugi::xml_parse_result result = doc.load_buffer_inplace(buffer.get(), length);
+    EPUB_PROFILE_END(XMLParseManifest);
+
+    if (result) {
+        for (pugi::xml_node &rootfile :
+             doc.child("container").child("rootfiles").children("rootfile")) {
+            rootfilePaths.emplace_back(rootfile.attribute("full-path").value());
+            // log_w("-----------> adding %s", rootfile.attribute("full-path").value());
         }
-    } while (!done);
-
-    XML_ParserFree(parser);
-    if (zipFile_.closeFile() != UNZ_OK) {
-        log_e("Failed to close ePub manifest %s", path_);
+    } else {
+        log_e("Failed to parse EPub manifest %s: %s", path_, result.description());
     }
 }
