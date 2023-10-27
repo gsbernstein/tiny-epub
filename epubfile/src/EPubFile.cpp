@@ -157,6 +157,107 @@ auto EPubFile::getReadableToCChapterIndex(const std::shared_ptr<EPubPlace> &ePub
     return opf_->getReadableToCChapterIndex(ePubPlace->getHRef());
 }
 
+auto EPubFile::hasDictionary(const std::string &chapterID) -> bool {
+    std::string dictionaryID = "dictionary-" + chapterID;
+
+    return opf_->exists(dictionaryID);
+}
+
+auto EPubFile::getDictionaryContent(const std::string &chapterID,
+                                    const std::shared_ptr<Place> &placeInReadable,
+                                    std::shared_ptr<Place> &placeInDictionary) -> std::string {
+
+    if (!hasDictionary(chapterID)) {
+        log_e("This chapter does not have any dictionary definitions.");
+        return "This chapter does not have any dictionary definitions.";
+    }
+
+    // Convert chapterID to dictionary file path
+    std::string dictionaryID = "dictionary-" + chapterID;
+    std::string dictionaryPath = opf_->getHrefByID(dictionaryID);
+
+    // Load the dictionary xhtml content
+    int fileOffset = placeInReadable->getOffset();
+    auto chapterHref = opf_->getHrefByID(chapterID);
+    // int currentOffset = findCharOffsetAtFileOffset(chapterHref, fileOffset);
+    int currentOffset = fileOffset;
+    pugi::xml_document &doc = getXHTMLFile(dictionaryPath);
+    pugi::xml_node closestNode;
+    pugi::xml_node prevNode;
+    int closestLocation = -1;
+
+    log_d("Loading dictionary for chapter: %s. Current offset: %d", chapterID.c_str(),
+          currentOffset);
+    // Search for the closest data-locations attribute closest to currentOffset without going over
+    for (auto p : doc.child("html").child("body").children("p")) {
+        int location = p.attribute("data-locations").as_int();
+        log_d("Found dictionary location: %d", location);
+
+        // If currentOffset is 0, set the closestNode as the first node
+        if (currentOffset == 0 || closestNode == nullptr) {
+            closestNode = p;
+            closestLocation = location;
+        }
+
+        if (location <= currentOffset) {
+            // Still finding nodes behind the user's placemark
+            closestLocation = location;
+            prevNode = closestNode;
+            closestNode = p;
+        } else {
+            // If we've gone over and the location is greater than the offset, we're good with
+            // what's left. Clearing prevNode means we haven't exhausted all definitions and will
+            // still have some to show.
+            prevNode = pugi::xml_node();
+            break;
+        }
+    }
+
+    // If closestNode refers to the last entry and there was no break, backtrack one entry so we
+    // always show one dictionary definition
+    if (prevNode) {
+        closestNode = prevNode;
+        closestLocation = closestNode.attribute("data-locations").as_int();
+    }
+
+    std::string dictionaryText;
+    std::string beforeClosestNodeText;
+    if (closestLocation != -1) {
+        // Construct the text with the XML before the closest node
+        for (auto p : doc.child("html").child("body").children("p")) {
+            if (p == closestNode) {
+                if (closestLocation < currentOffset) {
+                    beforeClosestNodeText += StringFormat("%s\n\n", p.child_value());
+                } else {
+                    dictionaryText += StringFormat("%s\n\n", p.child_value());
+                }
+                break;
+            }
+            beforeClosestNodeText += StringFormat("%s\n\n", p.child_value());
+        }
+
+        // Construct the text with the XML after the closest node
+        for (auto p = closestNode.next_sibling(); p; p = p.next_sibling()) {
+            dictionaryText += StringFormat("%s\n\n", p.child_value());
+        }
+
+        // Set the place in the dictionary based on the length of the text before the closest node
+        uint32_t charOffset = beforeClosestNodeText.length();
+        placeInDictionary = Place::factory(charOffset);
+
+        // Concatenate to form the full dictionaryText
+        dictionaryText = beforeClosestNodeText + dictionaryText;
+
+        log_i("Found closest node at char offset: %" PRIu32 " for location: %d/%d", charOffset,
+              closestLocation, currentOffset);
+    } else {
+        log_e("Location not found in dictionaryString chapter: %s : %d", chapterID.c_str(),
+              currentOffset);
+    }
+
+    return dictionaryText;
+}
+
 auto EPubFile::open() -> bool {
 
     PROFILE_START(openEPub);
