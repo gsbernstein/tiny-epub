@@ -22,10 +22,11 @@ public:
 
     struct SpineItem {
         ManifestItem *item;
-        int readableToCChapterIndex; // = -1 if not a chapter in the readable TOC
+        int chapterIdx;
+        bool chapterStart;
     };
 
-    [[nodiscard]] auto getSpine(Idx idx) const -> const SpineItem & { return spine_[idx]; }
+    [[nodiscard]] auto getSpine(SpineIdx idx) const -> const SpineItem & { return spine_[idx]; }
 
     [[nodiscard]] auto getFullPath(const std::string &fileName) const -> std::string {
         return basePath_ + fileName;
@@ -35,14 +36,17 @@ public:
 
     void extractPath(const char *fname, std::string &path);
 
-    auto getSpineIdx(const std::string &href) const -> int;
+    auto getSpineIdx(const std::string &href) const -> SpineIdx;
 
-    auto getReadableToCChapterIndex(const std::string &href) const -> int;
+    auto getChapterIdx(const std::string &href) const -> ChapterIdx;
+    auto getChapterIdx(SpineIdx spineIdx) const -> ChapterIdx;
+    auto spineIdxIsChapterStart(SpineIdx spineIdx) const -> bool;
+    auto getChapterFirstSpineIdx(SpineIdx spineIdx) const -> SpineIdx;
 
     auto exists(const std::string &id) const -> bool;
 
-    auto getHrefByID(const std::string &id) const -> std::string;
-    auto getIdByHref(const std::string &href) const -> std::string;
+    auto getHrefByManifestId(const std::string &manifestId) const -> std::string;
+    auto getManifestIdByHref(const std::string &href) const -> std::string;
 
 private:
     const char *path_;

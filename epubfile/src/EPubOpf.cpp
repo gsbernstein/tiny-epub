@@ -31,20 +31,25 @@ void EPubOpf::parse(const std::shared_ptr<uint8_t[]> &buffer, uint32_t length,
                              .mediaType = item.attribute("media-type").value()};
         }
 
+        int lastChapterIdx = -1;
+
         for (auto itemref : spine.children("itemref")) {
             std::string idref = itemref.attribute("idref").value();
 
             auto it = manifest_.find(idref);
             if (it != manifest_.end()) {
-                spine_.push_back(SpineItem{.item = &it->second, .readableToCChapterIndex = -1});
+                auto chapterIdx = readable->findEPubHRefChapterIdx(it->second.href);
+                bool chapterStart = false;
+                if (chapterIdx != -1) {
+                    lastChapterIdx = chapterIdx;
+                    chapterStart = true;
+                }
+                spine_.push_back(SpineItem{.item = &it->second,
+                                           .chapterIdx = lastChapterIdx,
+                                           .chapterStart = chapterStart});
             } else {
                 log_e("Spine idref not found in manifest: %s", idref.c_str());
             }
-        }
-
-        for (int32_t i = 0; i < readable->toc.size(); i++) {
-            int32_t spineIdx = getSpineIdx(readable->toc[i].href);
-            spine_[spineIdx].readableToCChapterIndex = i;
         }
     } else {
         log_e("Failed to parse EPub opf %s: %s", path_, result.description());
@@ -62,8 +67,8 @@ void EPubOpf::extractPath(const char *fname, std::string &path) {
     }
 }
 
-auto EPubOpf::getSpineIdx(const std::string &href) const -> int {
-    for (int spineIdx = 0; spineIdx < spine_.size(); spineIdx++) {
+auto EPubOpf::getSpineIdx(const std::string &href) const -> SpineIdx {
+    for (SpineIdx spineIdx = 0; spineIdx < spine_.size(); spineIdx++) {
         if (spine_[spineIdx].item->href == href) {
             return spineIdx;
         }
@@ -71,17 +76,27 @@ auto EPubOpf::getSpineIdx(const std::string &href) const -> int {
     return 0;
 }
 
-auto EPubOpf::getReadableToCChapterIndex(const std::string &href) const -> int {
-    int spineIdx = getSpineIdx(href);
+auto EPubOpf::getChapterIdx(const std::string &href) const -> ChapterIdx {
+    SpineIdx spineIdx = getSpineIdx(href);
+    return spine_[spineIdx].chapterIdx;
+}
 
-    while (spineIdx >= 0) {
-        if (spine_[spineIdx].readableToCChapterIndex != -1) {
-            return spine_[spineIdx].readableToCChapterIndex;
-        }
-        spineIdx -= 1;
+auto EPubOpf::getChapterIdx(SpineIdx spineIdx) const -> ChapterIdx {
+    return spine_[spineIdx].chapterIdx;
+}
+
+auto EPubOpf::spineIdxIsChapterStart(SpineIdx spineIdx) const -> bool {
+    return spine_[spineIdx].chapterStart;
+}
+
+auto EPubOpf::getChapterFirstSpineIdx(SpineIdx spineIdx) const -> SpineIdx {
+    SpineIdx chapterSpineIdx = spineIdx;
+
+    while (!spine_[chapterSpineIdx].chapterStart && (chapterSpineIdx > 0)) {
+        chapterSpineIdx--;
     }
 
-    return -1;
+    return chapterSpineIdx;
 }
 
 auto EPubOpf::exists(const std::string &id) const -> bool {
@@ -90,15 +105,15 @@ auto EPubOpf::exists(const std::string &id) const -> bool {
     return manifest_.find(id) != manifest_.end();
 }
 
-auto EPubOpf::getHrefByID(const std::string &id) const -> std::string {
-    auto it = manifest_.find(id);
+auto EPubOpf::getHrefByManifestId(const std::string &manifestId) const -> std::string {
+    auto it = manifest_.find(manifestId);
     if (it != manifest_.end()) {
         return it->second.href;
     }
     return "";
 }
 
-auto EPubOpf::getIdByHref(const std::string &href) const -> std::string {
+auto EPubOpf::getManifestIdByHref(const std::string &href) const -> std::string {
     for (auto &item : manifest_) {
         if (item.second.href == href) {
             return item.first;

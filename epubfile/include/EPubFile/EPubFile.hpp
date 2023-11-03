@@ -26,11 +26,11 @@ public:
 
     [[nodiscard]] auto isAnArticle() const -> bool { return readable_->isArticle(); }
 
-    // [[nodiscard]] inline auto getSpineIdxForOffset(uint32_t offset) const -> Idx {
+    // [[nodiscard]] inline auto getSpineIdxForOffset(uint32_t offset) const -> SpineIdx {
     //     return opf_->getSpineIdxForOffset(offset);
     // }
 
-    [[nodiscard]] inline auto getSpine(Idx idx) const -> const EPubOpf::SpineItem & {
+    [[nodiscard]] inline auto getSpine(SpineIdx idx) const -> const EPubOpf::SpineItem & {
         return opf_->getSpine(idx);
     }
 
@@ -49,16 +49,17 @@ public:
         return readable_->toc;
     }
 
-    [[nodiscard]] inline auto getSpineIdx(const std::string &href) const -> uint16_t {
+    [[nodiscard]] inline auto getSpineIdx(const std::string &href) const -> SpineIdx {
         return opf_->getSpineIdx(href);
     }
 
-    [[nodiscard]] inline auto getHrefByID(const std::string &id) const -> std::string {
-        return opf_->getHrefByID(id);
+    [[nodiscard]] inline auto getHrefByManifestId(const std::string &manifestId) const
+        -> std::string {
+        return opf_->getHrefByManifestId(manifestId);
     }
 
-    [[nodiscard]] inline auto getIdByHref(const std::string &href) const -> std::string {
-        return opf_->getIdByHref(href);
+    [[nodiscard]] inline auto getManifestIdByHref(const std::string &href) const -> std::string {
+        return opf_->getManifestIdByHref(href);
     }
 
     [[nodiscard]] auto getXHTMLFile(const std::string &path) -> pugi::xml_document &;
@@ -73,7 +74,7 @@ public:
 
     [[nodiscard]] inline auto isOpen() const -> bool { return fileOpen_; }
 
-    [[nodiscard]] auto getRelativeFilePath(const std::string &filename, Idx spineIdx) const
+    [[nodiscard]] auto getRelativeFilePath(const std::string &filename, SpineIdx spineIdx) const
         -> std::string {
         std::string mainFilePath = opf_->getFullPath(opf_->getSpine(spineIdx).item->href);
         std::string path;
@@ -81,7 +82,7 @@ public:
         return path + filename;
     }
 
-    [[nodiscard]] auto getUncompressedSize(Idx spineIdx) -> uint32_t {
+    [[nodiscard]] auto getUncompressedSize(SpineIdx spineIdx) -> uint32_t {
         std::string filePath = opf_->getFullPath(opf_->getSpine(spineIdx).item->href);
         // log_w("Loading file %s", filePath.c_str());
         if (epubUnzipper_.openFile(filePath.c_str())) {
@@ -92,15 +93,18 @@ public:
         return 0;
     }
 
-    auto getReadableToCChapterIndex(const std::shared_ptr<EPubPlace> &ePubPlace) const -> int;
+    auto getChapterIdx(const std::shared_ptr<EPubPlace> &ePubPlace) const -> ChapterIdx;
+    auto getChapterIdx(SpineIdx spineIdx) const -> ChapterIdx;
+    auto spineIdxIsChapterStart(SpineIdx spineIdx) const -> bool;
+    auto getChapterFirstSpineIdx(SpineIdx spineIdx) const -> SpineIdx;
 
-    auto hasSummary(const std::string &chapterID) -> bool;
-    auto getSummaryContent(std::string &chapterID,
+    auto hasSummary(const std::string &chapterId) -> bool;
+    auto getSummaryContent(std::string &chapterId,
                            const std::shared_ptr<EPubPlace> &placeInReadable,
                            std::shared_ptr<TxtPlace> &placeInSummary, bool includeUnread)
         -> SpiramString;
-    auto hasDictionary(const std::string &chapterID) -> bool;
-    auto getDictionaryContent(std::string &chapterID,
+    auto hasDictionary(const std::string &chapterId) -> bool;
+    auto getDictionaryContent(std::string &chapterId,
                               const std::shared_ptr<EPubPlace> &placeInReadable,
                               std::shared_ptr<TxtPlace> &placeInDictionary) -> SpiramString;
 
