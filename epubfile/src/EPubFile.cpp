@@ -152,8 +152,19 @@ auto EPubFile::getXHTMLFile(const std::string &path) -> pugi::xml_document & {
     return currentFileDoc_;
 }
 
+auto EPubFile::calculateFileSize(const std::string &href) -> uint32_t {
+    auto filePath = opf_->getFullPath(href);
+    auto [buffer, size] = getFile(filePath);
+
+    return size;
+}
+
 auto EPubFile::getChapterIdx(const std::shared_ptr<EPubPlace> &ePubPlace) const -> ChapterIdx {
     return opf_->getChapterIdx(ePubPlace->getHRef());
+}
+
+auto EPubFile::getChapterIdx(const std::string &href) const -> ChapterIdx {
+    return opf_->getChapterIdx(href);
 }
 
 auto EPubFile::getChapterIdx(SpineIdx spineIdx) const -> ChapterIdx {
@@ -168,19 +179,82 @@ auto EPubFile::getChapterFirstSpineIdx(SpineIdx spineIdx) const -> SpineIdx {
     return opf_->getChapterFirstSpineIdx(spineIdx);
 }
 
+auto EPubFile::hasToc() -> bool {
+    std::string tocId = "nav";
+    return opf_->exists(tocId);
+}
+
+auto EPubFile::getToc() -> ReadableTableOfContentsChapterVector {
+    if (toc_) {
+        return *toc_;
+    }
+
+    std::string tocId = "nav";
+    std::string tocPath = opf_->getHrefByManifestId(tocId);
+    pugi::xml_document &tocDoc = getXHTMLFile(tocPath);
+
+    ReadableTableOfContentsChapterVector toc;
+    uint32_t cumulativeOffset = 0;
+
+    std::function<void(pugi::xml_node, ReadableTableOfContentsChapterVector &)> processNavPoints;
+    processNavPoints = [&](pugi::xml_node navPoint, ReadableTableOfContentsChapterVector &toc) {
+        for (auto navPointChild : navPoint.children("li")) {
+            ReadableTableOfContentsChapter chapter;
+            chapter.title = navPointChild.child("a").child_value();
+            chapter.href = navPointChild.child("a").attribute("href").value();
+            pugi::xml_attribute epubOffsetAttr =
+                navPointChild.child("a").attribute("data-epub-offset");
+            if (epubOffsetAttr) {
+                chapter.epubOffset =
+                    static_cast<uint32_t>(strtoul(epubOffsetAttr.value(), nullptr, 10));
+            } else {
+                chapter.epubOffset = cumulativeOffset;
+            }
+            pugi::xml_attribute endEpubOffsetAttr =
+                navPointChild.child("a").attribute("data-end-epub-offset");
+            if (endEpubOffsetAttr) {
+                chapter.endEpubOffset =
+                    static_cast<uint32_t>(strtoul(endEpubOffsetAttr.value(), nullptr, 10));
+            } else {
+                auto fileSize = calculateFileSize(std::string(chapter.href));
+                cumulativeOffset += fileSize;
+                chapter.endEpubOffset = cumulativeOffset;
+            }
+
+            // log_w("Chapter %s: %s (%" PRIu32 " - %" PRIu32 ")", chapter.title.c_str(),
+            //       chapter.href.c_str(), chapter.epubOffset, chapter.endEpubOffset);
+            toc.push_back(chapter);
+
+            // Recurse into child <ol> elements, if any
+            for (auto nestedList : navPointChild.children("ol")) {
+                processNavPoints(nestedList, toc);
+            }
+        }
+    };
+
+    // Process the top-level <ol> elements in the TOC
+    for (auto navPoint : tocDoc.child("html").child("body").child("nav").children("ol")) {
+        processNavPoints(navPoint, toc);
+    }
+
+    toc_ = std::make_shared<ReadableTableOfContentsChapterVector>(toc);
+    return toc;
+}
+
 auto EPubFile::hasSummary(const std::string &chapterId) -> bool {
     std::string summaryId = "summary-" + chapterId;
 
     auto hasDirectChapterSummary = opf_->exists(summaryId);
-    if (hasDirectChapterSummary) {
-        return hasDirectChapterSummary;
+    auto hasToc = opf_->exists("nav");
+    if (hasDirectChapterSummary && hasToc) {
+        return true;
     }
 
     // Walk the chapters backwards in the spine to see if the chapter id matches
     auto summaryChapterHref = opf_->getHrefByManifestId(summaryId);
     auto summaryChapterIdx = opf_->getChapterIdx(summaryChapterHref);
 
-    return summaryChapterIdx != -1;
+    return summaryChapterIdx != -1 && hasToc;
 }
 
 auto EPubFile::getSummaryContent(std::string &chapterId,
@@ -195,10 +269,11 @@ auto EPubFile::getSummaryContent(std::string &chapterId,
 
     // Load the summary xhtml content
     auto chapterHref = opf_->getHrefByManifestId(chapterId);
-    auto chapterIdx = readable_->findEPubHRefChapterIdx(chapterHref);
-    if (chapterIdx == -1) {
-        chapterIdx = opf_->getChapterIdx(chapterHref);
-        chapterHref = getToc()[chapterIdx].href;
+    auto chapterIdx = opf_->getChapterIdx(chapterHref);
+    log_w("Chapter href: %s, chapter idx: %d, toc href: %s", chapterHref.c_str(), chapterIdx,
+          std::string(getToc()[chapterIdx].href).c_str());
+    if (std::string(getToc()[chapterIdx].href) != chapterHref) {
+        chapterHref = std::string(getToc()[chapterIdx].href);
         chapterId = opf_->getManifestIdByHref(chapterHref);
     }
 
@@ -207,18 +282,9 @@ auto EPubFile::getSummaryContent(std::string &chapterId,
     SpiramString summaryText;
 
     for (const auto &chapter : getToc()) {
-        auto sameChapter = (placeInReadable->isFor(DocType::EPUB) && chapter.href == chapterHref) ||
-                           (placeInReadable->isFor(DocType::TXT) &&
-                            chapter.txtOffset < placeInReadable->getOffset() &&
-                            placeInReadable->getOffset() < chapter.endTxtOffset);
-        auto futureChapter = (placeInReadable->isFor(DocType::EPUB) &&
-                              readable_->findEPubHRefChapterIdx(chapter.href) > chapterIdx) ||
-                             (placeInReadable->isFor(DocType::TXT) &&
-                              placeInReadable->getOffset() < chapter.txtOffset);
-        auto pastOrSameChapter = (placeInReadable->isFor(DocType::EPUB) &&
-                                  readable_->findEPubHRefChapterIdx(chapter.href) <= chapterIdx) ||
-                                 (placeInReadable->isFor(DocType::TXT) &&
-                                  placeInReadable->getOffset() >= chapter.txtOffset);
+        // auto sameChapter = chapter.href == chapterHref;
+        auto futureChapter = opf_->getChapterIdx(std::string(chapter.href)) > chapterIdx;
+        auto pastOrSameChapter = opf_->getChapterIdx(std::string(chapter.href)) <= chapterIdx;
 
         if (pastOrSameChapter) {
             placeInSummary->setOffset(summaryText.length());
@@ -228,40 +294,41 @@ auto EPubFile::getSummaryContent(std::string &chapterId,
             break;
         }
 
-        if (sameChapter && !includeUnread && chapter.partialChapterSummary != nullptr &&
-            !chapter.partialChapterSummary->text.empty()) {
-            summaryText += chapter.title;
-            summaryText += StringFormat(" (%d%% read)\n\n", chapter.partialChapterSummary->readPct);
-            summaryText += chapter.partialChapterSummary->text;
-            summaryText += "\n\n";
-        } else {
-            std::string currentChapterId = opf_->getManifestIdByHref(chapter.href);
-            std::string currentSummaryPath =
-                opf_->getHrefByManifestId("summary-" + currentChapterId);
-            pugi::xml_document &currentDoc = getXHTMLFile(currentSummaryPath);
+        // TODO: Fix partialChapterSummary by having the server return them in the UserReadable and
+        // then storing them somewhere else that's not the ToC
+        // if (sameChapter && !includeUnread && chapter.partialChapterSummary != nullptr &&
+        //     !chapter.partialChapterSummary->text.empty()) {
+        //     summaryText += chapter.title;
+        //     summaryText += StringFormat(" (%d%% read)\n\n",
+        //     chapter.partialChapterSummary->readPct); summaryText +=
+        //     chapter.partialChapterSummary->text; summaryText += "\n\n";
+        // } else {
+        std::string currentChapterId = opf_->getManifestIdByHref(std::string(chapter.href));
+        std::string currentSummaryPath = opf_->getHrefByManifestId("summary-" + currentChapterId);
+        pugi::xml_document &currentDoc = getXHTMLFile(currentSummaryPath);
 
-            for (auto node : currentDoc.child("html").child("body").children()) {
-                // If the node is p or other nodes with child nodes
-                if (std::string(node.name()) == "p") {
-                    for (auto child : node.children()) {
-                        if (child.type() == pugi::node_pcdata) { // If child is plain character data
-                            summaryText += child.value();
-                        }
-                        if (std::string(child.name()) == "br") {
-                            summaryText += "\n";
-                        }
+        for (auto node : currentDoc.child("html").child("body").children()) {
+            // If the node is p or other nodes with child nodes
+            if (std::string(node.name()) == "p") {
+                for (auto child : node.children()) {
+                    if (child.type() == pugi::node_pcdata) { // If child is plain character data
+                        summaryText += child.value();
                     }
-                    summaryText += "\n\n";
-                } else if (std::string(node.name()) == "h1") {
-                    summaryText += node.text().get();
-                    summaryText += "\n\n";
-                } else if (std::string(node.name()) == "br") {
-                    summaryText += "\n";
-                } else {
-                    summaryText += node.text().get();
+                    if (std::string(child.name()) == "br") {
+                        summaryText += "\n";
+                    }
                 }
+                summaryText += "\n\n";
+            } else if (std::string(node.name()) == "h1") {
+                summaryText += node.text().get();
+                summaryText += "\n\n";
+            } else if (std::string(node.name()) == "br") {
+                summaryText += "\n";
+            } else {
+                summaryText += node.text().get();
             }
         }
+        // }
     }
 
     return summaryText;
@@ -271,15 +338,16 @@ auto EPubFile::hasDictionary(const std::string &chapterId) -> bool {
     std::string dictionaryId = "dictionary-" + chapterId;
 
     auto hasDirectChapterDictionary = opf_->exists(dictionaryId);
-    if (hasDirectChapterDictionary) {
-        return hasDirectChapterDictionary;
+    auto hasToc = opf_->exists("nav");
+    if (hasDirectChapterDictionary && hasToc) {
+        return true;
     }
 
     // Walk the chapters backwards in the spine to see if the chapter id matches
     auto dictionaryChapterHref = opf_->getHrefByManifestId(dictionaryId);
     auto dictionaryChapterIdx = opf_->getChapterIdx(dictionaryChapterHref);
 
-    return dictionaryChapterIdx != -1;
+    return dictionaryChapterIdx != -1 && hasToc;
 }
 
 auto EPubFile::getDictionaryContent(std::string &chapterId,
@@ -294,10 +362,9 @@ auto EPubFile::getDictionaryContent(std::string &chapterId,
     // Load the dictionary xhtml content
     int fileOffset = placeInReadable->getOffset();
     auto chapterHref = opf_->getHrefByManifestId(chapterId);
-    auto chapterIdx = readable_->findEPubHRefChapterIdx(chapterHref);
-    if (chapterIdx == -1) {
-        chapterIdx = opf_->getChapterIdx(chapterHref);
-        chapterHref = getToc()[chapterIdx].href;
+    auto chapterIdx = opf_->getChapterIdx(chapterHref);
+    if (std::string(getToc()[chapterIdx].href) != chapterHref) {
+        chapterHref = std::string(getToc()[chapterIdx].href);
         chapterId = opf_->getManifestIdByHref(chapterHref);
     }
 
@@ -424,6 +491,8 @@ auto EPubFile::open() -> bool {
     } else {
         opf_ = std::make_shared<EPubOpf>(manifest.rootfilePaths[0].c_str());
         opf_->parse(opfBuffer, length, readable_);
+        auto toc = getToc();
+        opf_->loadSpine(toc);
     }
     EPUB_PROFILE_END(EPubOpf)
 
