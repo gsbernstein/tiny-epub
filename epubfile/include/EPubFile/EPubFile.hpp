@@ -9,6 +9,7 @@
 #include "Misc/Unzipper.hpp"
 #include "Models/DocType.hpp"
 #include "Models/Readable.hpp"
+#include "Models/UserReadablePartialChapterSummary.hpp"
 #include "Renderers/RendererStream.hpp"
 
 class EPubFile : public RendererStream {
@@ -103,10 +104,11 @@ public:
     auto getToc() -> ReadableTableOfContentsChapterVector;
 
     auto hasSummary(const std::string &chapterId) -> bool;
-    auto getSummaryContent(std::string &chapterId,
-                           const std::shared_ptr<EPubPlace> &placeInReadable,
-                           std::shared_ptr<TxtPlace> &placeInSummary, bool includeUnread)
-        -> SpiramString;
+    auto getSummaryContent(
+        std::string &chapterId, const std::shared_ptr<EPubPlace> &placeInReadable,
+        std::shared_ptr<TxtPlace> &placeInSummary,
+        const std::shared_ptr<UserReadablePartialChapterSummary> &partialChapterSummary,
+        bool includeUnread) -> SpiramString;
     auto hasDictionary(const std::string &chapterId) -> bool;
     auto getDictionaryContent(std::string &chapterId,
                               const std::shared_ptr<EPubPlace> &placeInReadable,
