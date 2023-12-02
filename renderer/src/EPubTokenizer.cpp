@@ -480,9 +480,9 @@ auto EPubTokenizer::getCharEntity(const char *str) -> std::pair<const char *, co
         } else if (number) {
             return {toUtf8(strtol(theStr.c_str(), nullptr, 10)), str};
         } else {
-            auto search = entities.at(static_cast<SpiramString>(theStr));
-            if (search != nullptr) {
-                return {search, str};
+            auto search = entities.find(static_cast<SpiramString>(theStr));
+            if (search != entities.end()) {
+                return {search->second, str};
             }
         }
     }
@@ -685,9 +685,6 @@ auto EPubTokenizer::loadAndTokenizePage(StreamPlace fromPlace, bool backwards, S
     pageCompleted_ = false;
 
     // ---
-
-    tokens_.clear();
-    pager_.clear();
 
     if (stream_->isAnArticle()) {
 
@@ -1917,7 +1914,7 @@ auto EPubTokenizer::addStrToPage(const pugi::char_t *str, uint32_t len) -> bool 
                         nextByte();
                     }
                 } while ((curChar > ' ') &&
-                         ((textCharCount_ < maxTextTokenCharSize_) || (curChar >= 0x80U)));
+                         ((textCharCount_ < maxTextTokenCharSize_) || ((curChar & 0xC0U) == 0x80)));
 
                 // The last test of the while above is to get a complete UTF8 multi-bytes
                 // character if the maximum word size is reached
