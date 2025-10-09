@@ -48,6 +48,10 @@ public:
         return nullptr;
     };
 
+    // For fonts that can set their size
+    virtual inline void setSupSubFontSize(FontHandle font) {}
+    virtual inline void setNormalFontSize(FontHandle font) {}
+
     // Returns the x position after drawing the text (advance)
     virtual int16_t drawSingleLineOfText(const char *cstr, int16_t x, int16_t y, bool invert,
                                          FontHandle font) = 0;
