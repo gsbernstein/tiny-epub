@@ -5,14 +5,10 @@ dependencies:
   epubfile:
     path: ../epubfile
   bmpimage:
-    git: https://github.com/sindarin-inc/cpp-misc.git
-    path: bmpimage
+    path: ../../cpp-misc/bmpimage
   idflog:
-    git: https://github.com/sindarin-inc/cpp-misc.git
-    path: idflog
+    path: ../../cpp-misc/idflog
   spiram-cpp:
-    git: https://github.com/sindarin-inc/cpp-misc.git
-    path: spiram-cpp
+    path: ../../cpp-misc/spiram-cpp
   stringutil:
-    git: https://github.com/sindarin-inc/cpp-misc.git
-    path: stringutil
+    path: ../../cpp-misc/stringutil
