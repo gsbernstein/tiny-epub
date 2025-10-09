@@ -5,6 +5,7 @@
 
 #include "Pager.hpp"
 #include "RendererDefs.hpp"
+#include "RendererDisplay.hpp"
 #include "RendererStream.hpp"
 #include "Tokens.hpp"
 
@@ -12,13 +13,15 @@ using namespace renderer_defs;
 
 class Tokenizer {
 public:
-    Tokenizer(Font *font, DisplayRect &rect, Tokens &tokens, Pager &pager)
-        : font_(font), rect_(rect), tokens_(tokens), pager_(pager) {}
+    Tokenizer(RendererDisplay &display, RendererDisplayRect &rect, Tokens &tokens, Pager &pager,
+              FontHandle font)
+        : display_(display), font_(font), rect_(rect), tokens_(tokens), pager_(pager) {}
     virtual ~Tokenizer() = default;
     Tokenizer(const Tokenizer &) = delete;
 
-    [[nodiscard]] static auto factory(const std::shared_ptr<RendererStream> &stream, Font *font,
-                                      DisplayRect &rect, Tokens &tokens, Pager &pager)
+    [[nodiscard]] static auto factory(const std::shared_ptr<RendererStream> &stream,
+                                      RendererDisplay &display, RendererDisplayRect &rect,
+                                      Tokens &tokens, Pager &pager, FontHandle font)
         -> std::shared_ptr<Tokenizer>;
 
     virtual auto loadAndTokenizePage(StreamPlace fromPlace, bool backwards = false,
@@ -32,7 +35,7 @@ public:
     // "G" character is a compromise between a very small width character (like the lowercase "l")
     // and a very large one (like the uppercase "W").
     void computeMaxTextTokenCharSize() {
-        maxTextTokenCharSize_ = rect_.width / font_->getTextWidth("G");
+        maxTextTokenCharSize_ = rect_.width / display_.getTextWidth("G", font_);
     }
 
     [[nodiscard]] auto getPlaceAtBeginningOfFile(StreamPlace streamPlace) const -> StreamPlace {
@@ -66,19 +69,18 @@ public:
 
     [[nodiscard]] virtual auto getStream() -> std::shared_ptr<RendererStream> = 0;
 
-    [[nodiscard]] virtual inline auto isAnArticle() const -> bool { return true; }
-
     [[nodiscard]] virtual inline auto isReady() const -> bool { return false; }
 
     [[nodiscard]] virtual inline auto getTxtOffset() const -> uint32_t { return 0; };
 
-    void setFont(Font *font) { font_ = font; }
+    void setFont(FontHandle font) { font_ = font; }
 
-    void setRect(DisplayRect rect) { rect_ = rect; }
+    void setRect(RendererDisplayRect rect) { rect_ = rect; }
 
 protected:
-    Font *font_{nullptr};
-    DisplayRect rect_;
+    RendererDisplay &display_;
+    FontHandle font_{};
+    RendererDisplayRect rect_;
     Tokens &tokens_;
     Pager &pager_;
 

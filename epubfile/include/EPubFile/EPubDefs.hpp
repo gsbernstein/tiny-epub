@@ -1,9 +1,8 @@
 #pragma once
 
+#include <Log/Log.hpp>
 #include <cinttypes>
 #include <utility>
-
-#include "sindarin-debug.h"
 
 using SpineIdx = int;
 using ChapterIdx = int;
@@ -17,3 +16,5 @@ using ChapterIdx = int;
 #define EPUB_PROFILE_START(v)
 #define EPUB_PROFILE_END(v)
 #endif
+
+constexpr const char *EPUB_TAG = "EPUB";

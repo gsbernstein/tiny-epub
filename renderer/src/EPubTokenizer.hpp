@@ -1,10 +1,10 @@
 #pragma once
 
+#include <Spiram/Map.hpp>
+#include <Spiram/String.hpp>
 #include <array>
 #include <unordered_map>
 
-#include "EPub/EPubFile.hpp"
-#include "Misc/SpiramAllocator.hpp"
 #include "Tokenizer.hpp"
 
 // EPubTokenizer
@@ -82,8 +82,9 @@
 class EPubTokenizer : public Tokenizer {
 
 public:
-    EPubTokenizer(Font *font, DisplayRect &rect, Tokens &tokens, Pager &pager)
-        : Tokenizer(font, rect, tokens, pager) {}
+    EPubTokenizer(RendererDisplay &display, RendererDisplayRect &rect, Tokens &tokens, Pager &pager,
+                  FontHandle font)
+        : Tokenizer(display, rect, tokens, pager, font) {}
     ~EPubTokenizer() override = default;
 
     [[nodiscard]] auto loadAndTokenizePage(StreamPlace fromPlace, bool backwards = false,
@@ -96,7 +97,8 @@ public:
 
     [[nodiscard]] inline auto toPlace(const StreamPlace &streamPlace) const
         -> std::shared_ptr<Place> override {
-        const EPubOpf::SpineItem &spineItem = stream_->getSpine(streamPlace.getSpineIdx());
+        const EPubOpf::SpineItem &spineItem =
+            stream_->epubFile->getSpine(streamPlace.getSpineIdx());
         return std::make_shared<EPubPlace>(streamPlace.getOffset(),
                                            static_cast<std::string>(spineItem.item->href));
     }
@@ -110,7 +112,7 @@ public:
     }
 
     void setStream(std::shared_ptr<RendererStream> stream) override {
-        stream_ = std::static_pointer_cast<EPubFile>(stream);
+        stream_ = std::static_pointer_cast<EPubFileRendererStream>(stream);
     }
 
     [[nodiscard]] auto getStream() -> std::shared_ptr<RendererStream> override { return stream_; }
@@ -122,12 +124,8 @@ public:
     [[nodiscard]] auto goBackward(StreamPlace streamPlace, uint32_t offsetToSubtract)
         -> StreamPlace override;
 
-    [[nodiscard]] inline auto isAnArticle() const -> bool override {
-        return stream_->isAnArticle();
-    }
-
     [[nodiscard]] inline auto isReady() const -> bool override {
-        return (stream_ != nullptr) && stream_->isOpen();
+        return (stream_ != nullptr) && stream_->epubFile->isOpen();
     }
 
     [[nodiscard]] inline auto getTxtOffset() const -> uint32_t override {
@@ -135,7 +133,7 @@ public:
     }
 
 private:
-    std::shared_ptr<EPubFile> stream_;
+    std::shared_ptr<EPubFileRendererStream> stream_;
     pugi::xml_node body_;
 
     // clang-format off
@@ -150,19 +148,12 @@ private:
 
     using Tags = SpiramMap<SpiramString, Tag>;
     using Entities = SpiramMap<SpiramString, const char *>;
-    using Characters = SpiramMap<SpiramString, const char *>;
 
     // Hash HTML tags
     static Tags tags;
 
     // Hash XHTML character entities (like &nbsp;) and their UTF-8 codification
     static Entities entities;
-
-    // Superscript Characters UTF-8 codification
-    static Characters superscriptCharacters;
-
-    // Subscript Characters UTF-8 codification
-    static Characters subscriptCharacters;
 
     // Where the tokenizer will start to parse tokens
     StreamPlace fromPlace_;

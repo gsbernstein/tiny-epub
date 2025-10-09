@@ -1,21 +1,27 @@
 #pragma once
 
+#include <BMPImage/BMPImage.hpp>
+#include <EPubFile/EPubDefs.hpp>
+#include <Log/Log.hpp>
+#include <Spiram/Map.hpp>
+#include <StringUtil/StringUtil.hpp>
+#include <array>
+#include <iostream>
 #include <utility>
 
-#include "Displays/DisplaySystem.hpp"
-#include "EPub/EPubDefs.hpp"
-#include "Misc/BMPImage.hpp"
-#include "Misc/Platform.hpp"
-#include "Models/Place.hpp"
-#include "config.h"
-#include "sindarin-debug.h"
+#include "Place.hpp"
+#include "RendererDisplay.hpp"
+
+#ifndef RENDERER_CHECK_STACK_WATERMARK
+#define RENDERER_CHECK_STACK_WATERMARK()
+#endif
 
 namespace renderer_defs {
 
 // The following defines are helpers for code development
 // That is specific to the renderer
 
-#define REND_DEBUGGING 0     // Show debugging messages where appropriate
+#define REND_DEBUG 0         // Show debugging messages where appropriate
 #define REND_EXIT_ON_ERROR 0 // Simulator Only!!
 #define REND_PROFILING 0     // Speed measurements
 #define REND_STATISTICS 0    // Stats on Tokens size and Lines size
@@ -27,29 +33,12 @@ namespace renderer_defs {
 #if REND_EXIT_ON_ERROR
 static constexpr bool REND_ON_ERROR_EXIT = true;
 #define REND_EXIT_SIM exit(1)
-#define REND_ELOG(f, ...)                                                                          \
-    {                                                                                              \
-        log_e(f, ##__VA_ARGS__);                                                                   \
-        assert(false && "REND_ELOG");                                                              \
-    }
 #else
 static constexpr bool REND_ON_ERROR_EXIT = false;
 #define REND_EXIT_SIM
 #endif
 
-#if REND_DEBUGGING
-static constexpr bool REND_DEBUG = true;
-#define REND_WLOG(f, ...) log_w(f, ##__VA_ARGS__);
-#ifndef REND_ELOG
-#define REND_ELOG(f, ...) log_e(f, ##__VA_ARGS__);
-#endif
-#else
-static constexpr bool REND_DEBUG = false;
-#define REND_WLOG(...)
-#ifndef REND_ELOG
-#define REND_ELOG(...)
-#endif
-#endif
+constexpr const char *REND_TAG = "REND";
 
 #if REND_PROFILING
 #define REND_PROFILE_START(v) PROFILE_START(v)
@@ -83,14 +72,15 @@ static constexpr uint16_t HRULE_DECI_LINE_HEIGHT = 4;
 // command is issued by the user. By design a paragraph cannot have more than 1500 bytes,
 // followed by a NEWLINE, an ENDOFPARAGRAPH, and a null.
 
-static constexpr uint16_t MAX_BYTES_PER_PARAGRAPH = CONFIG_MAX_BYTES_PER_PARAGRAPH;
-static constexpr uint16_t MAX_BYTES_PER_DISPLAY_PAGE = CONFIG_MAX_BYTES_PER_DISPLAY_PAGE;
+static constexpr uint16_t MAX_BYTES_PER_PARAGRAPH = CONFIG_EPUB_RENDERER_MAX_BYTES_PER_PARAGRAPH;
+static constexpr uint16_t MAX_BYTES_PER_DISPLAY_PAGE =
+    CONFIG_EPUB_RENDERER_MAX_BYTES_PER_DISPLAY_PAGE;
 static constexpr uint16_t MAX_BYTES_TO_RETRIEVE =
     (MAX_BYTES_PER_PARAGRAPH + MAX_BYTES_PER_DISPLAY_PAGE);
-static constexpr uint16_t CSTR_POOL_SIZE = CONFIG_CSTR_POOL_SIZE;
-static constexpr uint16_t TOKENS_SIZE = CONFIG_TOKENS_SIZE;
-static constexpr uint16_t MAX_BYTES_PER_LINE = CONFIG_MAX_BYTES_PER_LINE;
-static constexpr uint16_t LINES_SIZE = CONFIG_LINES_SIZE;
+static constexpr uint16_t CSTR_POOL_SIZE = CONFIG_EPUB_RENDERER_CSTR_POOL_SIZE;
+static constexpr uint16_t TOKENS_SIZE = CONFIG_EPUB_RENDERER_TOKENS_SIZE;
+static constexpr uint16_t MAX_BYTES_PER_LINE = CONFIG_EPUB_RENDERER_MAX_BYTES_PER_LINE;
+static constexpr uint16_t LINES_SIZE = CONFIG_EPUB_RENDERER_LINES_SIZE;
 static constexpr uint16_t PAGE_INDEX_SIZE = 500;
 
 static constexpr uint32_t END_OFFSET = 999999999U;
@@ -104,7 +94,7 @@ static constexpr uint32_t END_OFFSET = 999999999U;
 
 using Idx = int;
 
-#if CONFIG_FONT_TTF
+#if CONFIG_EPUB_RENDERER_NATIVE_SUPERSUBSCRIPT_CHARACTERS
 // These are the different tokens so as we parse a buffer, we more easily know what to do with the
 // text. Bits are assigned to each such that they can be combined in a mask for comparisons.
 enum class TokenId : uint16_t {
@@ -127,7 +117,7 @@ enum class TokenId : uint16_t {
     ETABLE = 1 << 15  // End of table
 };
 
-#if REND_DEBUGGING
+#if REND_DEBUG
 static const char *TokenIdStr[] = {
     "TEXT",   "ITEXT",  "HTEXT",  "NTEXT",   "SUPTEXT",  "SUBTEXT", "NEWLINE", "ENDPARAGRAPH",
     "HYPHEN", "ENDASH", "EMDASH", "PICTURE", "EPICTURE", "HRULE",   "BTABLE",  "ËTABLE"};
@@ -153,7 +143,7 @@ enum class TokenId : uint16_t {
     ETABLE = 1 << 13  // End of table
 };
 
-#if REND_DEBUGGING
+#if REND_DEBUG
 static const char *TokenIdStr[] = {"TEXT",         "ITEXT",  "HTEXT",  "NTEXT",  "NEWLINE",
                                    "ENDPARAGRAPH", "HYPHEN", "ENDASH", "EMDASH", "PICTURE",
                                    "EPICTURE",     "HRULE",  "BTABLE", "ËTABLE"};
@@ -165,7 +155,7 @@ static const char *TokenIdStr[] = {"TEXT",         "ITEXT",  "HTEXT",  "NTEXT", 
 static const uint16_t POOL_TOKENS =
     static_cast<uint16_t>(TokenId::TEXT) | static_cast<uint16_t>(TokenId::ITEXT) |
     static_cast<uint16_t>(TokenId::HTEXT)
-#if CONFIG_FONT_TTF
+#if CONFIG_EPUB_RENDERER_NATIVE_SUPERSUBSCRIPT_CHARACTERS
     | static_cast<uint16_t>(TokenId::SUBTEXT) | static_cast<uint16_t>(TokenId::SUPTEXT)
 #endif
     | static_cast<uint16_t>(TokenId::PICTURE) | static_cast<uint16_t>(TokenId::EPICTURE);

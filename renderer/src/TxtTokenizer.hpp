@@ -5,8 +5,9 @@
 class TxtTokenizer : public Tokenizer {
 
 public:
-    TxtTokenizer(Font *font, DisplayRect &rect, Tokens &tokens, Pager &pager)
-        : Tokenizer(font, rect, tokens, pager) {}
+    TxtTokenizer(RendererDisplay &display, RendererDisplayRect &rect, Tokens &tokens, Pager &pager,
+                 FontHandle font)
+        : Tokenizer(display, rect, tokens, pager, font) {}
     ~TxtTokenizer() override = default;
 
     [[nodiscard]] auto loadAndTokenizePage(StreamPlace fromPlace, bool backwards = false,
@@ -20,7 +21,7 @@ public:
         if (place->isFor(DocType::TXT)) {
             return {place->getOffset(), 0};
         } else {
-            log_e("Wrong Place Type: %" PRIu8, static_cast<uint8_t>(place->getDocType()));
+            LOGE(REND_TAG, "Wrong Place Type: %" PRIu8, static_cast<uint8_t>(place->getDocType()));
             REND_EXIT_SIM;
         }
 
@@ -63,7 +64,7 @@ private:
     inline auto addTokenToPage(Token &token, bool backwards = false, const char *str = nullptr,
                                uint8_t strSize = 0) -> bool {
         if (tokens_.add(token, str, strSize)) {
-            // log_w("Token Id: %" PRIu8 " at idx: %" PRIu16, (uint8_t)token.tokenId,
+            // LOGD(REND_TAG, "Token Id: %" PRIu8 " at idx: %" PRIu16, (uint8_t)token.tokenId,
             // tokens_.getLastIdx());
             return !pager_.addLastTokenToPage(backwards) && !backwards;
         } else {

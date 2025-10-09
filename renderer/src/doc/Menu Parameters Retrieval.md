@@ -25,9 +25,9 @@ In the `guy/menu-parameters-retrieval` branch, the `ReadableScreen` class has be
         if (retrieveMenuParameters) {
             const MenuParameters &menuParameters = renderer_.getMenuParameters();
             if (!menuParameters.empty()) {
-                log_d("Menu Parameters:");
+                LOGD(REND_TAG, "Menu Parameters:");
                 for (auto &param : menuParameters) {
-                    log_d("    %s: %s", param.first.c_str(), param.second.c_str());
+                    LOGD(REND_TAG, "%s: %s", param.first.c_str(), param.second.c_str());
                 }
                 retrieveMenuParameters = false;
                 continue;

@@ -1,5 +1,3 @@
 #pragma once
 
-#include <cinttypes>
-
-enum class DocType : uint8_t { TXT, EPUB, NONE };
+enum class DocType { NONE = 0, TXT = 1, EPUB = 2 };

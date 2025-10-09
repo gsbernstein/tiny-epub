@@ -2,7 +2,6 @@
 
 #include <utility>
 
-#include "Displays/TextInsets.hpp"
 #include "NullTokenizer.hpp"
 #include "Pager.hpp"
 #include "RendererDefs.hpp"
@@ -14,17 +13,17 @@ using namespace renderer_defs;
 class Renderer {
 
 public:
-    Renderer(DisplaySystem &display, DisplayRect rect, Font *font)
-        : display_(display), rect_(rect), tokens_(font), pager_(tokens_, display, rect),
+    Renderer(RendererDisplay &display, RendererDisplayRect rect, FontHandle font)
+        : display_(display), rect_(rect), tokens_(display, font), pager_(tokens_, display, rect),
           font_(font) {
-        // log_w("constructor...");
-        tokenizer_ = std::make_shared<NullTokenizer>(font_, rect_, tokens_, pager_);
+        // LOGD(REND_TAG, "constructor...");
+        tokenizer_ = std::make_shared<NullTokenizer>(display_, rect_, tokens_, pager_, font_);
         // Be sure the pager and tokenizer are set up with the correct rect and font
         setRect(rect);
         setFont(font);
     }
 
-    auto setRect(DisplayRect rect) -> void {
+    auto setRect(RendererDisplayRect rect) -> void {
         rect_ = rect;
         pager_.setRect(rect);
         tokenizer_->setRect(rect);
@@ -33,18 +32,18 @@ public:
     [[nodiscard]] auto getLineSpacing() const -> int { return pager_.getLineSpacing(); }
     void setLineSpacing(int newSpacing) { pager_.setLineSpacing(newSpacing); }
 
-    auto setFont(Font *font) -> void {
+    auto setFont(FontHandle font) -> void {
         font_ = font;
         pager_.setFont(font_);
         tokenizer_->setFont(font_);
         tokens_.setFont(font_);
     }
 
-    [[nodiscard]] auto getFont() const -> Font * { return font_; }
+    [[nodiscard]] auto getFont() const -> FontHandle { return font_; }
 
     auto setStream(const std::shared_ptr<RendererStream> &stream) -> void {
-        // log_w("setStream...");
-        tokenizer_ = Tokenizer::factory(stream, font_, rect_, tokens_, pager_);
+        // LOGD(REND_TAG, "setStream...");
+        tokenizer_ = Tokenizer::factory(stream, display_, rect_, tokens_, pager_, font_);
     }
 
     [[nodiscard]] inline auto getStream() -> std::shared_ptr<RendererStream> {
@@ -52,12 +51,12 @@ public:
     }
 
     auto setCurrentPlace(std::shared_ptr<Place> newPlace) -> void {
-        // log_w("setCurrentPlace...");
+        // LOGD(REND_TAG, "setCurrentPlace...");
         currentPlace_ = tokenizer_->toStreamPlace(std::move(newPlace));
     }
 
     [[nodiscard]] auto getStreamPlace(std::shared_ptr<Place> place) -> StreamPlace {
-        // log_w("setCurrentPlace...");
+        // LOGD(REND_TAG, "setCurrentPlace...");
         return tokenizer_->toStreamPlace(std::move(place));
     }
 
@@ -86,8 +85,8 @@ public:
         -> std::pair<std::shared_ptr<Place>, uint8_t>;
 
     void showStats() {
-        log_w("Circular buffer max lenghts: Tokens: %" PRIu16 ", CStrPool: %" PRIu16,
-              tokens_.getMaxTokensCount(), tokens_.getMaxCStrPoolCount());
+        LOGI(REND_TAG, "Circular buffer max lenghts: Tokens: %" PRIu16 ", CStrPool: %" PRIu16,
+             tokens_.getMaxTokensCount(), tokens_.getMaxCStrPoolCount());
     }
 
     // NOLINTNEXTLINE(modernize-use-nodiscard)
@@ -120,11 +119,11 @@ public:
     }
 
 private:
-    DisplaySystem &display_;
-    DisplayRect rect_;
+    RendererDisplay &display_;
+    RendererDisplayRect rect_;
     Tokens tokens_;
     Pager pager_;
-    Font *font_;
+    FontHandle font_{};
 
     std::shared_ptr<Tokenizer> tokenizer_{nullptr};
 

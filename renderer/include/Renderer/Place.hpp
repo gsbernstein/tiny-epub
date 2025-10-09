@@ -1,22 +1,14 @@
 #pragma once
 
+#include <Spiram/String.hpp>
 #include <cinttypes>
 #include <memory>
 #include <string>
 #include <utility>
 
 #include "DocType.hpp"
-#include "Misc/SpiramAllocator.hpp"
-#include "sindarin-debug.h"
 
 class Place {
-private:
-#if SIMULATOR && !TESTS
-    static constexpr bool REND_ON_ERROR_EXIT = true;
-#else
-    static constexpr bool REND_ON_ERROR_EXIT = false;
-#endif
-
 public:
     virtual ~Place() = default;
     [[nodiscard]] virtual auto isFor(DocType docType) const -> bool = 0;

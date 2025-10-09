@@ -1,34 +1,32 @@
 #pragma once
 
+#include <Unzipper/Unzipper.hpp>
+#include <optional>
 #include <pugixml.hpp>
 #include <utility>
 
 #include "EPubDefs.hpp"
+#include "EPubDrm.hpp"
 #include "EPubOpf.hpp"
-#include "Misc/SpiramAllocator.hpp"
-#include "Misc/Unzipper.hpp"
-#include "Models/DocType.hpp"
-#include "Models/Readable.hpp"
-#include "Models/UserReadablePartialChapterSummary.hpp"
-#include "Renderers/RendererStream.hpp"
-#include "Storage/SolDrm.hpp"
 
-class EPubFile : public RendererStream {
+class EPubFile {
 public:
-    EPubFile(const SFile &file, std::shared_ptr<Readable> readable, SolDrm &solDrm)
-        : RendererStream(DocType::EPUB), epubUnzipper_(file), readable_(std::move(readable)),
-          currentFileBuffer_(nullptr), solDrm_(solDrm) {
+    EPubFile(std::shared_ptr<UnzipperFileStream> file, std::shared_ptr<EPubDrm> drm = nullptr)
+        : epubUnzipper_(file), currentFileBuffer_(nullptr), drm_(drm) {
         open();
     }
 
-    ~EPubFile() override { close(); };
+    ~EPubFile() { close(); };
 
-    [[nodiscard]] auto read() -> int override { return 0; }
-    [[nodiscard]] auto seek(uint32_t pos) -> bool override { return false; }
-    [[nodiscard]] auto position() -> size_t override { return 0; }
-    [[nodiscard]] auto size() -> size_t override { return 0; /* opf_->getTotalSize(); */ }
+    EPubFile(const EPubFile &) = delete;
+    EPubFile &operator=(const EPubFile &) = delete;
 
-    [[nodiscard]] auto isAnArticle() const -> bool { return readable_->isArticle(); }
+    // Shims to maintain old behavior
+    // TODO: It would be nice to remove this, or at least make the behavior more explicit
+    // e.g. this could be named noPageBreaksOnChapters or something like that depending on
+    // what exactly it does
+    [[nodiscard]] auto isAnArticle() const -> bool { return isAnArticle_; }
+    void setIsAnArticle(bool isAnArticle) { isAnArticle_ = isAnArticle; }
 
     // [[nodiscard]] inline auto getSpineIdxForOffset(uint32_t offset) const -> SpineIdx {
     //     return opf_->getSpineIdxForOffset(offset);
@@ -58,7 +56,8 @@ public:
         return opf_->getHrefByManifestId(manifestId);
     }
 
-    [[nodiscard]] inline auto getManifestIdByHref(const std::string &href) const -> std::string {
+    [[nodiscard]] inline auto getManifestIdByHref(const std::string_view &href) const
+        -> std::string {
         return opf_->getManifestIdByHref(href);
     }
 
@@ -86,34 +85,26 @@ public:
     auto getUncompressedSize(const std::string &href) -> uint32_t;
     auto getUncompressedSize(SpineIdx spineIdx) -> uint32_t;
 
-    auto getChapterIdx(const std::shared_ptr<EPubPlace> &ePubPlace) const -> ChapterIdx;
     auto getChapterIdx(const std::string_view &href) const -> ChapterIdx;
     auto getChapterIdx(SpineIdx spineIdx) const -> ChapterIdx;
     auto spineIdxIsChapterStart(SpineIdx spineIdx) const -> bool;
+    auto getChapterFirstHref(const std::string_view &href) const -> std::string {
+        return opf_->getChapterFirstHref(href);
+    }
     auto getChapterFirstSpineIdx(SpineIdx spineIdx) const -> SpineIdx;
     auto getOffsetPreviousSpineItemsInChapter(SpineIdx spineIdx) -> uint32_t;
 
     auto hasToc() -> bool;
-    auto getToc() -> ReadableTableOfContentsChapterVector;
+    auto getToc() -> EPubTocChapterVector;
 
     auto hasEpubAddition(const std::string_view &spineHref, const std::string &additionType)
         -> bool;
-    auto hasSummary(const std::string_view &spineHref) -> bool;
-    auto getSummaryContent(
-        const std::shared_ptr<EPubPlace> &placeInReadable,
-        std::shared_ptr<TxtPlace> &placeInSummary,
-        const std::shared_ptr<UserReadablePartialChapterSummary> &partialChapterSummary,
-        bool includeUnread) -> SpiramString;
-    auto hasDictionary(const std::string_view &spineHref) -> bool;
-    auto getDictionaryContent(const std::shared_ptr<EPubPlace> &placeInReadable,
-                              std::shared_ptr<TxtPlace> &placeInDictionary) -> SpiramString;
 
     void close();
 
 private:
     Unzipper epubUnzipper_;
-    const std::shared_ptr<Readable> readable_;
-    std::shared_ptr<ReadableTableOfContentsChapterVector> toc_;
+    std::shared_ptr<EPubTocChapterVector> toc_;
 
     pugi::xml_document currentFileDoc_;
 
@@ -124,8 +115,10 @@ private:
     // std::unique_ptr<pugi::char_t[]> currentFileBuffer_;
     std::shared_ptr<uint8_t[]> currentFileBuffer_;
     std::string currentFilePath_;
-    SolDrm &solDrm_;
-    std::optional<std::vector<uint8_t>> solDrmKey_;
+    std::shared_ptr<EPubDrm> drm_;
+    std::optional<std::vector<uint8_t>> drmKey_;
+
+    bool isAnArticle_{false};
 
     auto open() -> bool;
 };

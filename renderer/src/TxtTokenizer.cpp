@@ -30,9 +30,9 @@ auto TxtTokenizer::loadAndTokenizePage(StreamPlace fromPlace, bool backwards, St
     }
 
     if constexpr (REND_DEBUG) {
-        log_w("Starting tokenizer at streamPlace %s", fromPlace.str().c_str());
+        LOGI(REND_TAG, "Starting tokenizer at streamPlace %s", fromPlace.str().c_str());
         if (backwards) {
-            log_w("Going up to place %s", toPlace->str().c_str());
+            LOGI(REND_TAG, "Going up to place %s", toPlace->str().c_str());
         }
     }
 
@@ -57,7 +57,7 @@ auto TxtTokenizer::loadAndTokenizePage(StreamPlace fromPlace, bool backwards, St
         }
     }
 
-    // REND_WLOG("First Character: %c (%02" PRIX8 "H)",
+    // LOGD(REND_TAG, "First Character: %c (%02" PRIX8 "H)",
     //       (((curChar >= ' ') && (curChar < 127)) ? curChar : ' '), curChar);
 
     while ((!pageCompleted) && (curChar != 0) && (!tokens_.isFull())) {
@@ -79,9 +79,9 @@ auto TxtTokenizer::loadAndTokenizePage(StreamPlace fromPlace, bool backwards, St
             break;
         }
 
-        // REND_WLOG("Set the stream place to %s",
+        // LOGD(REND_TAG, "Set the stream place to %s",
         //       addOffset(fromPlace, streamRelativeOffset).str().c_str());
-        // REND_WLOG("Current Character: %c (%02" PRIX8 "H)",
+        // LOGD(REND_TAG, "Current Character: %c (%02" PRIX8 "H)",
         //       (((curChar >= ' ') && (curChar < 127)) ? curChar : ' '), curChar);
 
         if (curChar == '-') {
@@ -168,7 +168,7 @@ auto TxtTokenizer::loadAndTokenizePage(StreamPlace fromPlace, bool backwards, St
                     } while ((curChar != '\0') && (curChar < ' ') && (curChar != '\n') &&
                              (curChar != '\t'));
                     if (curChar == '\n') {
-                        // log_w("Stream relative offset:%" PRIu32, streamRelativeOffset);
+                        // LOGD(REND_TAG, "Stream relative offset:%" PRIu32, streamRelativeOffset);
                         if (backwards && !tokens_.isEmpty() &&
                             ((fromPlace.getOffset() + streamRelativeOffset) >=
                              toPlace->getOffset())) {
@@ -210,8 +210,8 @@ auto TxtTokenizer::loadAndTokenizePage(StreamPlace fromPlace, bool backwards, St
         pager_.setEndOfFile();
     }
 
-    REND_WLOG("Computed Word Count: %" PRIu16, pager_.getWordCount());
-    REND_WLOG("Tokens Count: %" PRIu16, tokens_.getTokenCount());
+    LOGD(REND_TAG, "Computed Word Count: %" PRIu16, pager_.getWordCount());
+    LOGD(REND_TAG, "Tokens Count: %" PRIu16, tokens_.getTokenCount());
 
     if (backwards) {
         pager_.setFirstLineIdxBackward();
@@ -243,7 +243,7 @@ auto TxtTokenizer::getFileLocation(StreamPlace fromPlace) -> StreamPlace {
     }
 
     if (!stream_->seek(fromPlace.getOffset())) {
-        log_e("failed to seek at streamPlace %s in file!", fromPlace.str().c_str());
+        LOGE(REND_TAG, "failed to seek at streamPlace %s in file!", fromPlace.str().c_str());
         REND_EXIT_SIM;
     } else {
         uint8_t ch = 0;
@@ -292,8 +292,8 @@ auto TxtTokenizer::getFileLocation(StreamPlace fromPlace) -> StreamPlace {
             }
             fromPlace.incOffset();
             if constexpr (REND_DEBUG) {
-                log_d("Synching to start of UTF8 character at streamPlace %s",
-                      fromPlace.str().c_str());
+                LOGD(REND_TAG, "Synching to start of UTF8 character at streamPlace %s",
+                     fromPlace.str().c_str());
             }
         }
     }

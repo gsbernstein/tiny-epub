@@ -1,23 +1,22 @@
 #pragma once
 
+#include <BMPImage/BMPImage.hpp>
 #include <array>
 #include <memory>
 #include <utility>
 
-#include "EPub/EPubFile.hpp"
-#include "Misc/BMPImage.hpp"
 #include "RendererDefs.hpp"
+#include "RendererStream.hpp"
 #include "Tokens.hpp"
-#include "config.h"
 
 // From the token stream, generate pages content, separating tokens into lines and pages that fit
 // the current display region. The last page retrieved is found in the lines_[] circular array.
 class Pager {
 private:
     Tokens &tokens_;
-    DisplaySystem &display_;
-    DisplayRect rect_;
-    std::shared_ptr<EPubFile> stream_;
+    RendererDisplay &display_;
+    RendererDisplayRect rect_;
+    std::shared_ptr<EPubFileRendererStream> stream_;
 
     uint16_t wordCount_{0};
     uint16_t currentPageDecilineHeight_{0};
@@ -42,7 +41,7 @@ private:
 
     int lineSpacing_{0};
 
-    Font *font_{nullptr};
+    FontHandle font_{};
 
     [[nodiscard]] inline auto lastLineTokenIdx(Idx lineIdx) const -> Idx {
         return lines_[lineIdx].tokenIdx + lines_[lineIdx].tokenCount - 1;
@@ -68,7 +67,7 @@ private:
         linesTailIdx_ = (linesTailIdx_ + 1) % LINES_SIZE;
     }
 
-#if CONFIG_FONT_TTF
+#if CONFIG_EPUB_RENDERER_NATIVE_SUPERSUBSCRIPT_CHARACTERS
     auto getLineSegment(LineInfo &lineInfo, Idx tokenIdx, Idx endTokenIdx, Line &line) const -> Idx;
     void drawSingleLine(LineInfo &lineInfo, int yPos) const;
 #else
@@ -80,21 +79,21 @@ private:
     void newLine(uint16_t height);
 
 public:
-    Pager(Tokens &tokens, DisplaySystem &display, DisplayRect &rect)
+    Pager(Tokens &tokens, RendererDisplay &display, RendererDisplayRect &rect)
         : tokens_(tokens), display_(display), rect_(rect) {}
     Pager(const Pager &) = delete;
 
     void setStream(const std::shared_ptr<RendererStream> &stream) {
-        stream_ = std::static_pointer_cast<EPubFile>(stream);
+        stream_ = std::static_pointer_cast<EPubFileRendererStream>(stream);
     }
 
     [[nodiscard]] auto getLineSpacing() const -> int { return lineSpacing_; }
     void setLineSpacing(int newSpacing) { lineSpacing_ = newSpacing; }
 
-    void setFont(Font *font) { font_ = font; }
+    void setFont(FontHandle font) { font_ = font; }
 
     [[nodiscard]] auto getLineHeightPlusSpacing() const -> int {
-        return font_->lineHeight() + lineSpacing_;
+        return display_.lineHeight(font_) + lineSpacing_;
     }
     // Switch to 1/10 of a line as this gives us more flexibilty in rendering
     // precision between lines.
@@ -116,7 +115,7 @@ public:
         maxLineWidth_ = rect_.width;
         lines_[0] = {0, 0, 0, 0, 0};
         uint16_t notUsed;
-        display_.getTextSize(" ", &spaceWidth_, &notUsed);
+        display_.getTextSize(" ", &spaceWidth_, &notUsed, font_);
         menuParameters_.clear();
     }
 
@@ -128,7 +127,7 @@ public:
         rightIndent_ = rightIndent;
         maxLineWidth_ = rect_.width - rightIndent;
 
-        // log_w("Set Line Indent: %" PRIu16 " - %" PRIu16, leftIndent_, rightIndent_);
+        // LOGD(REND_TAG, "Set Line Indent: %" PRIu16 " - %" PRIu16, leftIndent_, rightIndent_);
     }
 
     inline auto getLineIndent() -> std::pair<uint16_t, uint16_t> {
@@ -162,8 +161,8 @@ public:
     [[nodiscard]] auto getPageLength() const -> uint16_t;
 
     [[nodiscard]] inline auto getNextPageStreamPlace() const -> StreamPlace {
-        log_d("getNextPageStreamPlace: (%s) next: %s", atEOF_ ? "at EOF" : "not at eof",
-              nextPagePlace_.str().c_str());
+        LOGD(REND_TAG, "getNextPageStreamPlace: (%s) next: %s", atEOF_ ? "at EOF" : "not at eof",
+             nextPagePlace_.str().c_str());
         return nextPagePlace_;
     }
 
@@ -193,14 +192,14 @@ public:
     inline void freeLineHead() {
         if (linesHeadIdx_ != linesTailIdx_) {
 
-            // REND_WLOG("Freeing line at idx %" PRIu16, linesHeadIdx_);
+            // LOGD(REND_TAG, "Freeing line at idx %" PRIu16, linesHeadIdx_);
 
             tokens_.freeTokens(lines_[linesHeadIdx_].tokenIdx, lines_[linesHeadIdx_].tokenCount);
 
             incrLinesHeadIdx();
             if constexpr (REND_DEBUG) {
                 if (linesHeadIdx_ == linesTailIdx_) {
-                    REND_ELOG("lines_[] is empty!!");
+                    LOGE(REND_TAG, "lines_[] is empty!!");
                 }
             }
         }
@@ -221,9 +220,9 @@ public:
 
     void show() const;
 
-    void setRect(DisplayRect rect) { rect_ = rect; }
+    void setRect(RendererDisplayRect rect) { rect_ = rect; }
 
-#if REND_DEBUGGING
+#if REND_DEBUG
     auto getTokenIdStr(TokenId id) const -> const char * {
         for (int idx = 0; idx < 16; idx++) {
             if ((uint16_t)id & (1 << idx)) {

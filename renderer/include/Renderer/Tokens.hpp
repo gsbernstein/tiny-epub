@@ -1,6 +1,7 @@
 #pragma once
 
 #include <array>
+#include <cstring>
 
 #include "RendererDefs.hpp"
 
@@ -8,7 +9,8 @@ using namespace renderer_defs;
 
 class Tokens {
 private:
-    Font *font_;
+    RendererDisplay &display_;
+    FontHandle font_{};
 
     TokensArray tokens_{};
     Idx tokensTailIdx_{0};
@@ -33,7 +35,7 @@ private:
                 token.cStr = cStrPool_.data();
                 cStrPoolTailIdx_ = token.length;
             } else {
-                log_e("cStrPool_[] is too small!");
+                LOGE(REND_TAG, "cStrPool_[] is too small!");
                 REND_EXIT_SIM;
             }
         }
@@ -46,12 +48,12 @@ private:
     }
 
 public:
-    Tokens(Font *font) : font_(font) {}
+    Tokens(RendererDisplay &display, FontHandle font) : display_(display), font_(font) {}
     [[nodiscard]] inline auto operator[](renderer_defs::Idx idx) const -> const Token & {
         return tokens_[idx];
     }
 
-    inline auto setFont(Font *font) -> void { font_ = font; }
+    inline auto setFont(FontHandle font) -> void { font_ = font; }
 
     [[nodiscard]] inline auto tokenAt(renderer_defs::Idx idx) -> Token & { return tokens_[idx]; }
 
@@ -61,7 +63,7 @@ public:
     [[nodiscard]] inline auto getLastIdx() const -> Idx {
         if constexpr (REND_DEBUG) {
             if (isEmpty()) {
-                REND_ELOG("forgetLast(): tokens is empty!");
+                LOGE(REND_TAG, "forgetLast(): tokens is empty!");
             }
         }
 
@@ -72,7 +74,7 @@ public:
 
         if constexpr (REND_DEBUG) {
             if (isEmpty()) {
-                REND_ELOG("getLast(): tokens is empty!");
+                LOGE(REND_TAG, "getLast(): tokens is empty!");
             }
         }
         return tokens_[getLastIdx()];
@@ -89,7 +91,7 @@ public:
     [[nodiscard]] inline auto getBeforeLast() -> Token & {
         if constexpr (REND_DEBUG) {
             if (getTokenCount() < 2) {
-                REND_ELOG("getBeforeLast(): tokens not large enough!");
+                LOGE(REND_TAG, "getBeforeLast(): tokens not large enough!");
             }
         }
         return tokens_[(tokensTailIdx_ > 1) ? (tokensTailIdx_ - 2)
@@ -99,7 +101,7 @@ public:
     inline void forgetLast() {
         if constexpr (REND_DEBUG) {
             if (tokensHeadIdx_ == tokensTailIdx_) {
-                REND_ELOG("forgetLast(): tokens is empty!");
+                LOGE(REND_TAG, "forgetLast(): tokens is empty!");
             }
         }
 
@@ -160,7 +162,7 @@ public:
     [[nodiscard]] inline auto getNextAvailable() -> Token & {
         if constexpr (REND_DEBUG) {
             if (isFull()) {
-                REND_ELOG("forgetLast(): tokens[] is full!");
+                LOGE(REND_TAG, "forgetLast(): tokens[] is full!");
             }
         }
         memset(reinterpret_cast<uint8_t *>(&tokens_[tokensTailIdx_]), 0, sizeof(Token));
@@ -171,7 +173,7 @@ public:
 
         if constexpr (REND_DEBUG) {
             if (isFull()) {
-                REND_ELOG("forgetLast(): tokens[] is full!");
+                LOGE(REND_TAG, "forgetLast(): tokens[] is full!");
             }
         }
         tokensTailIdx_ = (tokensTailIdx_ + 1) % TOKENS_SIZE;

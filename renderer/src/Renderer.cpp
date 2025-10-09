@@ -3,8 +3,6 @@
 #include <algorithm>
 #include <utility>
 
-#include "UI/Fonts/Fonts.hpp"
-
 // Retrieve and show the page at fromPlace location.
 auto Renderer::renderPage(std::shared_ptr<Place> fromPlace, int16_t numSkipLines, bool forceRefresh,
                           bool retrieveMenuParameters)
@@ -16,7 +14,7 @@ auto Renderer::renderPage(std::shared_ptr<Place> fromPlace, int16_t numSkipLines
                                  ? tokenizer_->getPlaceAtBeginningOfDocument()
                                  : tokenizer_->toStreamPlace(std::move(fromPlace));
 
-    REND_WLOG("%s is place in file being requested.", startPlace.str().c_str());
+    LOGD(REND_TAG, "%s is place in file being requested.", startPlace.str().c_str());
 
     tokens_.clear();
     pager_.clear();
@@ -28,7 +26,7 @@ auto Renderer::renderPage(std::shared_ptr<Place> fromPlace, int16_t numSkipLines
     //           << ", Pager first Place: " << pager_.getStreamPlaceOfFirstLine().str() <<
     //           std::endl;
 
-    PROFILE_START(loadAndTokenizePage);
+    REND_PROFILE_START(loadAndTokenizePage);
 
     // std::cout << "Pager Line Count: " << pager_.getLineCount() << std::endl;
 
@@ -45,13 +43,13 @@ auto Renderer::renderPage(std::shared_ptr<Place> fromPlace, int16_t numSkipLines
         }
     }
 
-    PROFILE_END_LOG_MS(loadAndTokenizePage);
+    REND_PROFILE_END(loadAndTokenizePage);
 
     // pager_.show();
 
     uint8_t darkPicturePercent = pager_.displayPage(numSkipLines);
 
-    REND_WLOG("Returning next page place to be %s", nextPlace_.str().c_str());
+    LOGD(REND_TAG, "Returning next page place to be %s", nextPlace_.str().c_str());
 
     if constexpr (REND_STATS) {
         showStats();
@@ -86,12 +84,12 @@ auto Renderer::goBackwardsOnePage(StreamPlace endPlace) -> StreamPlace {
     // Figure out how much to read before the current place. If we're too
     // close to the beginning, we just read from the beginning.
 
-    // log_e("Before goBackward(): endPlace: %s", endPlace.str().c_str());
+    // LOGE(REND_TAG, "Before goBackward(): endPlace: %s", endPlace.str().c_str());
 
     StreamPlace seekPlace =
         tokenizer_->goBackward(endPlace, maxPageCount + MAX_BYTES_PER_PARAGRAPH);
 
-    // log_e("After goBackward(): seekPlace: %s", seekPlace.str().c_str());
+    // LOGE(REND_TAG, "After goBackward(): seekPlace: %s", seekPlace.str().c_str());
 
     // Tokenize it the same as you would for a forwards render. seekPlace will be returned to be at
     // a UTF8 character boundary
@@ -125,13 +123,13 @@ auto Renderer::goBackwardsOnePage(StreamPlace endPlace) -> StreamPlace {
 
 auto Renderer::getPreviousPlace() -> std::shared_ptr<Place> {
 
-    PROFILE_START(goBackwardsOnePage);
+    REND_PROFILE_START(goBackwardsOnePage);
 
     previousPlace_ = goBackwardsOnePage(currentPlace_);
 
-    PROFILE_END_LOG_MS(goBackwardsOnePage);
+    REND_PROFILE_END(goBackwardsOnePage);
 
-    REND_WLOG("Computed place: %s", previousPlace_.str().c_str());
+    LOGD(REND_TAG, "Computed place: %s", previousPlace_.str().c_str());
 
     return tokenizer_->toPlace(previousPlace_);
 }

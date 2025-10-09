@@ -1,12 +1,16 @@
 #pragma once
 
+#include <Spiram/Map.hpp>
+#include <Spiram/String.hpp>
+#include <Spiram/Vector.hpp>
+#include <StringUtil/StringUtil.hpp>
 #include <memory>
 #include <string>
 #include <unordered_map>
 #include <vector>
 
 #include "EPubDefs.hpp"
-#include "Models/Readable.hpp"
+#include "EPubToc.hpp"
 
 class EPubOpf {
 public:
@@ -23,11 +27,9 @@ public:
         bool chapterStart;
     };
 
-    void parse(const std::shared_ptr<uint8_t[]> &buffer, uint32_t length,
-               const std::shared_ptr<Readable> &readable);
-    void loadSpine(const ReadableTableOfContentsChapterVector &toc);
-    auto findChapterIdxInToc(const ReadableTableOfContentsChapterVector &toc, SpineItem &spineItem)
-        -> ChapterIdx;
+    void parse(const std::shared_ptr<uint8_t[]> &buffer, uint32_t length);
+    void loadSpine(const EPubTocChapterVector &toc);
+    auto findChapterIdxInToc(const EPubTocChapterVector &toc, SpineItem &spineItem) -> ChapterIdx;
 
     [[nodiscard]] auto getSpine(SpineIdx idx) const -> const SpineItem & { return spine_[idx]; }
 

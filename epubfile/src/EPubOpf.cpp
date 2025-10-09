@@ -6,12 +6,11 @@
 
 #include "EPubDefs.hpp"
 
-void EPubOpf::parse(const std::shared_ptr<uint8_t[]> &buffer, uint32_t length,
-                    const std::shared_ptr<Readable> &readable) {
+void EPubOpf::parse(const std::shared_ptr<uint8_t[]> &buffer, uint32_t length) {
 
     basePath_ = "";
     extractPath(path_, basePath_);
-    // log_i("Base Path: %s", basePath_.c_str());
+    // LOGI(EPUB_TAG, "Base Path: %s", basePath_.c_str());
 
     pugi::xml_document doc;
     pugi::xml_parse_result result = doc.load_buffer_inplace(buffer.get(), length);
@@ -38,17 +37,18 @@ void EPubOpf::parse(const std::shared_ptr<uint8_t[]> &buffer, uint32_t length,
 
             auto it = manifest_.find(static_cast<SpiramString>(idref));
             if (it != manifest_.end()) {
-                spine_.push_back(SpineItem{.item = &it->second});
+                spine_.push_back(
+                    SpineItem{.item = &it->second, .chapterIdx = -1, .chapterStart = false});
             } else {
-                log_e("Spine idref not found in manifest: %s", idref.c_str());
+                LOGE(EPUB_TAG, "Spine idref not found in manifest: %s", idref.c_str());
             }
         }
     } else {
-        log_e("Failed to parse EPub opf %s: %s", path_, result.description());
+        LOGE(EPUB_TAG, "Failed to parse EPub opf %s: %s", path_, result.description());
     }
 }
 
-void EPubOpf::loadSpine(const ReadableTableOfContentsChapterVector &toc) {
+void EPubOpf::loadSpine(const EPubTocChapterVector &toc) {
     int lastChapterIdx = -1;
     SpineVector spineWithChapters;
 
@@ -59,9 +59,8 @@ void EPubOpf::loadSpine(const ReadableTableOfContentsChapterVector &toc) {
             lastChapterIdx = chapterIdx;
             chapterStart = true;
         }
-        // log_w("Spine item %s chapter %d chapterStart %d", spineItem.item->href.c_str(),
-        // chapterIdx,
-        //       chapterStart);
+        // LOGW(EPUB_TAG, "Spine item %s chapter %d chapterStart %d", spineItem.item->href.c_str(),
+        // chapterIdx, chapterStart);
         spineWithChapters.push_back(SpineItem{
             .item = spineItem.item, .chapterIdx = lastChapterIdx, .chapterStart = chapterStart});
     }
@@ -69,13 +68,14 @@ void EPubOpf::loadSpine(const ReadableTableOfContentsChapterVector &toc) {
     spine_ = spineWithChapters;
 }
 
-auto EPubOpf::findChapterIdxInToc(const ReadableTableOfContentsChapterVector &toc,
-                                  SpineItem &spineItem) -> ChapterIdx {
+auto EPubOpf::findChapterIdxInToc(const EPubTocChapterVector &toc, SpineItem &spineItem)
+    -> ChapterIdx {
     ChapterIdx idx = 0;
     // Walk the spine and compare the href to the toc. If the href isn't found in the toc, walk the
     // spine backwards until the href is found
     for (auto &chapter : toc) {
-        // log_w("%d: Comparing %s to %s", idx, chapter.href.c_str(), spineItem.item->href.c_str());
+        // LOGW(EPUB_TAG, "%d: Comparing %s to %s", idx, chapter.href.c_str(),
+        // spineItem.item->href.c_str());
         if (chapter.href == spineItem.item->href) {
             return idx;
         }
@@ -139,8 +139,8 @@ auto EPubOpf::getChapterFirstHref(const std::string_view &spineHRef) const -> st
 }
 
 auto EPubOpf::exists(const std::string &id) const -> bool {
-    log_d("Checking if %s exists in manifest: %d", id.c_str(),
-          manifest_.find(static_cast<SpiramString>(id)) != manifest_.end());
+    LOGD(EPUB_TAG, "Checking if %s exists in manifest: %d", id.c_str(),
+         manifest_.find(static_cast<SpiramString>(id)) != manifest_.end());
     return manifest_.find(static_cast<SpiramString>(id)) != manifest_.end();
 }
 

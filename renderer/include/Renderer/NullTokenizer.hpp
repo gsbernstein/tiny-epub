@@ -1,13 +1,14 @@
 #pragma once
 
-#include "Models/DocType.hpp"
+#include "DocType.hpp"
 #include "Tokenizer.hpp"
 
 class NullTokenizer : public Tokenizer {
 
 public:
-    NullTokenizer(Font *font, DisplayRect &rect, Tokens &tokens, Pager &pager)
-        : Tokenizer(font, rect, tokens, pager) {}
+    NullTokenizer(RendererDisplay &display, RendererDisplayRect &rect, Tokens &tokens, Pager &pager,
+                  FontHandle font)
+        : Tokenizer(display, rect, tokens, pager, font) {}
     ~NullTokenizer() override = default;
 
     [[nodiscard]] auto loadAndTokenizePage(StreamPlace fromPlace, bool backwards = false,
@@ -47,7 +48,7 @@ public:
 
 private:
     void error() const {
-        log_e("There is no stream defined for the Renderer");
+        LOGE(REND_TAG, "There is no stream defined for the Renderer");
         REND_EXIT_SIM;
     }
 };

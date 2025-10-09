@@ -1,5 +1,8 @@
 #pragma once
 
+#include <EPubFile/EPubFile.hpp>
+#include <Spiram/String.hpp>
+#include <StringUtil/StringUtil.hpp>
 #include <cinttypes>
 #include <cstddef>
 #include <cstdint>
@@ -10,10 +13,7 @@
 #include <string>
 #include <utility>
 
-#include "Misc/SpiramAllocator.hpp"
-#include "Misc/StringUtil.hpp"
-#include "Models/DocType.hpp"
-#include "sindarin-debug.h"
+#include "DocType.hpp"
 
 class RendererStream {
 private:
@@ -96,10 +96,12 @@ public:
         : RendererStream(docType), stream_(std::make_shared<std::istringstream>(string)) {
         setSize(string.length());
     }
+#ifndef TINY_EPUB_SPIRAMSTRING_IS_STD
     StdStringStream(SpiramString &string, DocType docType = DocType::TXT)
         : RendererStream(docType), stream_(std::make_shared<SpiramIStream>(string)) {
         setSize(string.length());
     }
+#endif
 
     void setSize(size_t size) { size_ = size; }
 
@@ -155,4 +157,19 @@ protected:
     const uint8_t *data_;
     int pos_ = 0;
     size_t size_ = 0;
+};
+
+class EPubFileRendererStream : public RendererStream {
+public:
+    EPubFileRendererStream(std::shared_ptr<EPubFile> epubFile)
+        : RendererStream(DocType::EPUB), epubFile(std::move(epubFile)) {}
+
+    ~EPubFileRendererStream() override = default;
+
+    [[nodiscard]] auto read() -> int override { return 0; }
+    [[nodiscard]] auto seek(uint32_t pos) -> bool override { return false; }
+    [[nodiscard]] auto position() -> size_t override { return 0; }
+    [[nodiscard]] auto size() -> size_t override { return 0; }
+
+    std::shared_ptr<EPubFile> epubFile;
 };
