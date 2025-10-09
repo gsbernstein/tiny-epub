@@ -1,0 +1,16 @@
+version: "1.0.0"
+description: epubfile
+dependencies:
+  idflog:
+    git: https://github.com/sindarin-inc/cpp-misc.git
+    path: idflog
+  spiram-cpp:
+    git: https://github.com/sindarin-inc/cpp-misc.git
+    path: spiram-cpp
+  stringutil:
+    git: https://github.com/sindarin-inc/cpp-misc.git
+    path: stringutil
+  unzipper:
+    git: https://github.com/sindarin-inc/cpp-misc.git
+    # This is causing an error in the embedded-app build for some reason
+    # path: unzipper

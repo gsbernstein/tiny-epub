@@ -1,0 +1,19 @@
+{
+    "configurations": [
+        {
+            "name": "tests",
+            "includePath": [
+                "${default}"
+            ],
+            "defines": [
+                "_DEBUG",
+                "UNICODE",
+                "_UNICODE"
+            ],
+            "cStandard": "c17",
+            "cppStandard": "c++17",
+            "compileCommands": "${workspaceFolder}/tests/build/compile_commands.json"
+        }
+    ],
+    "version": 4
+}

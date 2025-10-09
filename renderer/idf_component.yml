@@ -1,0 +1,18 @@
+## IDF Component Manager Manifest File
+version: "1.0.0"
+description: renderer
+dependencies:
+  epubfile:
+    path: ../epubfile
+  bmpimage:
+    git: https://github.com/sindarin-inc/cpp-misc.git
+    path: bmpimage
+  idflog:
+    git: https://github.com/sindarin-inc/cpp-misc.git
+    path: idflog
+  spiram-cpp:
+    git: https://github.com/sindarin-inc/cpp-misc.git
+    path: spiram-cpp
+  stringutil:
+    git: https://github.com/sindarin-inc/cpp-misc.git
+    path: stringutil

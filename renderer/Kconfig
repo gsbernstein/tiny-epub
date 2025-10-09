@@ -1,0 +1,53 @@
+menu "Tiny ePub Renderer"
+
+    config EPUB_RENDERER_MAX_BYTES_PER_PARAGRAPH
+        int "Maximum bytes per paragraph"
+        default 5003
+        help
+        Upper bound for the number of bytes accumulated while parsing a single
+        paragraph before forcing a break.
+
+    config EPUB_RENDERER_MAX_BYTES_PER_DISPLAY_PAGE
+        int "Maximum bytes per display page"
+        default 2400
+        help
+        Soft cap on bytes considered when seeking page boundaries.
+
+    config EPUB_RENDERER_CSTR_POOL_SIZE
+        int "Character pool size"
+        default 2000
+        help
+        Size of the character pool used to store token strings.
+
+    config EPUB_RENDERER_TOKENS_SIZE
+        int "Tokens ring size"
+        default 500
+        help
+        Capacity of the circular buffer that holds tokens for a page.
+
+    config EPUB_RENDERER_MAX_BYTES_PER_LINE
+        int "Maximum bytes per line"
+        default 200
+        help
+        Upper bound on bytes considered when laying out a single line.
+
+    config EPUB_RENDERER_LINES_SIZE
+        int "Lines ring size"
+        default 36
+        help
+        Capacity of the circular buffer that holds lines for a page.
+
+    config EPUB_RENDERER_USE_SPIRAM
+        bool "Use SPIRAM heap when possible"
+        depends on SPIRAM
+        default y
+
+    config EPUB_RENDERER_REPLACE_SUPERSUBSCRIPT_CHARACTERS
+        bool "Replace superscript and subscript glyphs"
+        default n
+
+    config EPUB_RENDERER_NATIVE_SUPERSUBSCRIPT_CHARACTERS
+        bool "Render superscript and subscript with native glyphs at smaller sizes"
+        default n
+
+endmenu
