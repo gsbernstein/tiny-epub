@@ -1043,6 +1043,24 @@ auto EPubTokenizer::interpret(pugi::xml_node node) -> bool {
                 italic_ = true;
                 break;
 
+            case Tag::SPAN: {
+                // Check for CSS class-based italic styling
+                pugi::xml_attribute classAttr = node.attribute("class");
+                if (classAttr) {
+                    const char *classStr = classAttr.value();
+                    // Check for common italic class names
+                    if (classStr && (strstr(classStr, "italic") != nullptr ||
+                                     strstr(classStr, "emph") != nullptr ||
+                                     strstr(classStr, "i") != nullptr)) {
+                        if (tokenizingStarted_ && closeTextToken()) {
+                            return false;
+                        }
+                        italic_ = true;
+                    }
+                }
+                break;
+            }
+
             case Tag::OL:
                 if (tokenizingStarted_) {
                     if (closeTextToken()) {
@@ -1297,6 +1315,23 @@ auto EPubTokenizer::interpret(pugi::xml_node node) -> bool {
                         return false;
                     }
                     break;
+
+                case Tag::SPAN: {
+                    // Check if this span had italic class and close it
+                    pugi::xml_attribute classAttr = node.attribute("class");
+                    if (classAttr) {
+                        const char *classStr = classAttr.value();
+                        if (classStr && (strstr(classStr, "italic") != nullptr ||
+                                         strstr(classStr, "emph") != nullptr ||
+                                         strstr(classStr, "i") != nullptr)) {
+                            italic_ = false;
+                            if (tokenizingStarted_ && closeTextToken()) {
+                                return false;
+                            }
+                        }
+                    }
+                    break;
+                }
 
                 case Tag::BREAK:
                     if (tokenizingStarted_) {
