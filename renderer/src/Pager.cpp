@@ -26,7 +26,6 @@ auto Pager::addLastTokenToPage(bool dontStop) -> bool {
     case TokenId::ITEXT:
     case TokenId::HTEXT:
     case TokenId::NTEXT:
-    case TokenId::ITALIC:
 
 #if CONFIG_EPUB_RENDERER_NATIVE_SUPERSUBSCRIPT_CHARACTERS
     case TokenId::SUPTEXT:
@@ -84,8 +83,7 @@ auto Pager::addLastTokenToPage(bool dontStop) -> bool {
 
         if (static_cast<uint16_t>(token.tokenId) &
             (static_cast<uint16_t>(TokenId::TEXT) | static_cast<uint16_t>(TokenId::ITEXT) |
-             static_cast<uint16_t>(TokenId::HTEXT) | static_cast<uint16_t>(TokenId::NTEXT) |
-             static_cast<uint16_t>(TokenId::ITALIC)
+             static_cast<uint16_t>(TokenId::HTEXT) | static_cast<uint16_t>(TokenId::NTEXT)
 #if CONFIG_EPUB_RENDERER_NATIVE_SUPERSUBSCRIPT_CHARACTERS
              | static_cast<uint16_t>(TokenId::SUBTEXT) | static_cast<uint16_t>(TokenId::SUPTEXT)
 #endif
@@ -265,8 +263,7 @@ auto Pager::computeWordCount() const -> uint16_t {
              tokens_.nextTokenIdx(tokenIdx)) {
             if (static_cast<uint16_t>(tokens_[tokenIdx].tokenId) &
                 (static_cast<uint16_t>(TokenId::TEXT) | static_cast<uint16_t>(TokenId::ITEXT) |
-                 static_cast<uint16_t>(TokenId::HTEXT) | static_cast<uint16_t>(TokenId::NTEXT) |
-                 static_cast<uint16_t>(TokenId::ITALIC)
+                 static_cast<uint16_t>(TokenId::HTEXT) | static_cast<uint16_t>(TokenId::NTEXT)
 #if CONFIG_EPUB_RENDERER_NATIVE_SUPERSUBSCRIPT_CHARACTERS
                  | static_cast<uint16_t>(TokenId::SUBTEXT) | static_cast<uint16_t>(TokenId::SUPTEXT)
 #endif
