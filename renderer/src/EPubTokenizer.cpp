@@ -1036,7 +1036,6 @@ auto EPubTokenizer::interpret(pugi::xml_node node) -> bool {
 
             case Tag::I:
             case Tag::EM:
-            case Tag::STRONG:
                 if (tokenizingStarted_ && closeTextToken()) {
                     return false;
                 }
@@ -1049,9 +1048,9 @@ auto EPubTokenizer::interpret(pugi::xml_node node) -> bool {
                 if (classAttr) {
                     const char *classStr = classAttr.value();
                     // Check for common italic class names
+                    // Only match "italic" or "emph" - avoid false positive matching of "i" substring
                     if (classStr && (strstr(classStr, "italic") != nullptr ||
-                                     strstr(classStr, "emph") != nullptr ||
-                                     strstr(classStr, "i") != nullptr)) {
+                                     strstr(classStr, "emph") != nullptr)) {
                         if (tokenizingStarted_ && closeTextToken()) {
                             return false;
                         }
@@ -1309,7 +1308,6 @@ auto EPubTokenizer::interpret(pugi::xml_node node) -> bool {
 
                 case Tag::I:
                 case Tag::EM:
-                case Tag::STRONG:
                     italic_ = false;
                     if (tokenizingStarted_ && closeTextToken()) {
                         return false;
@@ -1321,9 +1319,9 @@ auto EPubTokenizer::interpret(pugi::xml_node node) -> bool {
                     pugi::xml_attribute classAttr = node.attribute("class");
                     if (classAttr) {
                         const char *classStr = classAttr.value();
+                        // Only match "italic" or "emph" - avoid false positive matching of "i" substring
                         if (classStr && (strstr(classStr, "italic") != nullptr ||
-                                         strstr(classStr, "emph") != nullptr ||
-                                         strstr(classStr, "i") != nullptr)) {
+                                         strstr(classStr, "emph") != nullptr)) {
                             italic_ = false;
                             if (tokenizingStarted_ && closeTextToken()) {
                                 return false;
