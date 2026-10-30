@@ -290,8 +290,8 @@ static constexpr uint16_t SUPSUB_TOKENS =
 static constexpr uint16_t SUPSUB_TOKENS = 0;
 #endif
 
-// Retrieve a single segment from the linsinfo. superscript and subscripts are cutting lines in
-// multiple segments.
+// Retrieve a single segment from the lineinfo. Lines are cut into multiple segments around each
+// superscript or subscript token and wherever the italic state changes.
 auto Pager::getLineSegment(LineInfo &lineInfo, Idx nextTokenIdx, Idx endTokenIdx,
                            Line &lineSegment) const -> Idx {
     lineSegment[0] = 0;
