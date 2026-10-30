@@ -287,6 +287,11 @@ auto Pager::getPageLength() const -> uint16_t {
 }
 
 #if CONFIG_EPUB_RENDERER_NATIVE_SUPERSUBSCRIPT_CHARACTERS
+static constexpr uint16_t SUPSUB_TOKENS =
+    static_cast<uint16_t>(TokenId::SUBTEXT) | static_cast<uint16_t>(TokenId::SUPTEXT);
+#else
+static constexpr uint16_t SUPSUB_TOKENS = 0;
+#endif
 
 // Retrieve a single segment from the linsinfo. superscript and subscripts are cutting lines in
 // multiple segments.
@@ -303,9 +308,7 @@ auto Pager::getLineSegment(LineInfo &lineInfo, Idx nextTokenIdx, Idx endTokenIdx
         auto tokenId = tokens_[tokenIdx].tokenId;
         bool tokenItalic = tokens_[tokenIdx].isItalic;
 
-        if (!first &&
-            (static_cast<uint16_t>(tokenId) & (static_cast<uint16_t>(TokenId::SUBTEXT) |
-                                               static_cast<uint16_t>(TokenId::SUPTEXT))) != 0) {
+        if (!first && (static_cast<uint16_t>(tokenId) & SUPSUB_TOKENS) != 0) {
             break;
         }
 
@@ -331,9 +334,7 @@ auto Pager::getLineSegment(LineInfo &lineInfo, Idx nextTokenIdx, Idx endTokenIdx
 
         tokens_.nextTokenIdx(tokenIdx);
 
-        if (first &&
-            (static_cast<uint16_t>(tokenId) & (static_cast<uint16_t>(TokenId::SUBTEXT) |
-                                               static_cast<uint16_t>(TokenId::SUPTEXT))) != 0) {
+        if (first && (static_cast<uint16_t>(tokenId) & SUPSUB_TOKENS) != 0) {
             break;
         }
 
@@ -357,15 +358,15 @@ void Pager::drawSingleLine(LineInfo &lineInfo, int yPos) const {
 
     while (nextTokenIdx != endTokenIdx) {
 
-        auto tokenId = tokens_[nextTokenIdx].tokenId;
+        [[maybe_unused]] auto tokenId = tokens_[nextTokenIdx].tokenId;
         bool isItalic = tokens_[nextTokenIdx].isItalic;
 
         nextTokenIdx = getLineSegment(lineInfo, nextTokenIdx, endTokenIdx, lineSegment);
 
         int theYPos = yPos;
 
-        if ((static_cast<uint16_t>(tokenId) & (static_cast<uint16_t>(TokenId::SUBTEXT) |
-                                               static_cast<uint16_t>(TokenId::SUPTEXT))) != 0) {
+#if CONFIG_EPUB_RENDERER_NATIVE_SUPERSUBSCRIPT_CHARACTERS
+        if ((static_cast<uint16_t>(tokenId) & SUPSUB_TOKENS) != 0) {
 
             int32_t yOffset = getLineHeightPlusSpacing() / 5;
             auto normalHeight = getLineHeightPlusSpacing();
@@ -379,19 +380,19 @@ void Pager::drawSingleLine(LineInfo &lineInfo, int yPos) const {
             }
             xPos = display_.drawSingleLineOfText(lineSegment.data(), xPos, theYPos, false, font_);
             display_.setNormalFontSize(font_);
-        } else {
-            if (isItalic) {
-                display_.setItalicFont(font_, true);
-            }
-            xPos = display_.drawSingleLineOfText(lineSegment.data(), xPos, yPos, false, font_);
-            if (isItalic) {
-                display_.setItalicFont(font_, false);
-            }
+            continue;
+        }
+#endif
+
+        if (isItalic) {
+            display_.setItalicFont(font_, true);
+        }
+        xPos = display_.drawSingleLineOfText(lineSegment.data(), xPos, theYPos, false, font_);
+        if (isItalic) {
+            display_.setItalicFont(font_, false);
         }
     }
 }
-
-#else
 
 // Prepare a line to be displayed on screen
 void Pager::getLine(LineInfo &lineStruct, Line &line) const {
@@ -420,7 +421,6 @@ void Pager::getLine(LineInfo &lineStruct, Line &line) const {
     }
     line[lineIdx] = 0;
 }
-#endif
 
 auto Pager::computeDarkPercent(const uint8_t *bitmap, uint16_t width, uint16_t height) const
     -> uint8_t {
@@ -560,14 +560,7 @@ auto Pager::displayPage(int16_t numSkipLines) -> uint8_t {
                 deciY += ENDPARAGRAPH_DECI_LINE_HEIGHT;
             }
 
-#if CONFIG_EPUB_RENDERER_NATIVE_SUPERSUBSCRIPT_CHARACTERS
             drawSingleLine(lines_[lineIdx], deciToPix(deciY));
-#else
-            Line line;
-            getLine(lines_[lineIdx], line);
-            display_.drawSingleLineOfText(line.data(), rect_.x + lines_[lineIdx].leftIndent,
-                                          rect_.y + deciToPix(deciY), false, font_);
-#endif
             deciY += NEWLINE_DECI_LINE_HEIGHT;
             break;
 
@@ -578,33 +571,20 @@ auto Pager::displayPage(int16_t numSkipLines) -> uint8_t {
                               display_.getForegroundColor());
             deciY += HRULE_DECI_LINE_HEIGHT;
 
-#if CONFIG_EPUB_RENDERER_NATIVE_SUPERSUBSCRIPT_CHARACTERS
             drawSingleLine(lines_[lineIdx], deciToPix(deciY));
-#else
-            Line line;
-            getLine(lines_[lineIdx], line);
-            display_.drawSingleLineOfText(line.data(), rect_.x + lines_[lineIdx].leftIndent,
-                                          rect_.y + deciToPix(deciY), false, font_);
-#endif
             deciY += NEWLINE_DECI_LINE_HEIGHT + ENDPARAGRAPH_DECI_LINE_HEIGHT;
         } break;
 
         default:
             // Only draw the lines if it's not skipped from the caller.
             if (lineNbr >= numSkipLines) {
-#if CONFIG_EPUB_RENDERER_NATIVE_SUPERSUBSCRIPT_CHARACTERS
-                drawSingleLine(lines_[lineIdx], deciToPix(deciY));
-#else
+#if !CONFIG_EPUB_RENDERER_NATIVE_SUPERSUBSCRIPT_CHARACTERS
                 Line line;
                 getLine(lines_[lineIdx], line);
-                // LOGD(REND_TAG, "Real line width: %" PRIu16 " indent: %" PRIu16,
-                //       display_.getTextWidth(line.data(), font_) + lines_[lineIdx].leftIndent,
-                //       lines_[lineIdx].leftIndent);
                 LOGD(REND_TAG, "[%" PRIu16 "] %s: <%s>", lineIdx, token.streamPlace.str().c_str(),
                      line.data());
-                display_.drawSingleLineOfText(line.data(), rect_.x + lines_[lineIdx].leftIndent,
-                                              rect_.y + deciToPix(deciY), false, font_);
 #endif
+                drawSingleLine(lines_[lineIdx], deciToPix(deciY));
             } else {
                 LOGD(REND_TAG, "[%" PRIu16 "] %s: <SKIPPED>", lineIdx,
                      token.streamPlace.str().c_str());
