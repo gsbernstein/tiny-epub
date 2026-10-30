@@ -5,7 +5,9 @@
 #include <SDL.h>
 #include <SDL_ttf.h>
 #include <filesystem>
+#include <map>
 #include <memory>
+#include <sstream>
 #include <string>
 #include <vector>
 
@@ -385,4 +387,107 @@ TEST_CASE("Renderer renders from hardcoded string", "[renderer][txt][string]") {
         display.fillScreen(display.getBackgroundColor());
     }
     REQUIRE(renderer.getNumRenderedLines() > 0);
+}
+
+// Records each drawn string together with whether italics were on when it was drawn.
+class RecordingDisplay : public MockDisplay {
+public:
+    using MockDisplay::MockDisplay;
+
+    void setItalicFont(FontHandle, bool italic) override { italic_ = italic; }
+
+    int16_t drawSingleLineOfText(const char *cstr, int16_t x, int16_t y, bool invert,
+                                 FontHandle font) override {
+        drawn_.emplace_back(cstr, italic_);
+        return MockDisplay::drawSingleLineOfText(cstr, x, y, invert, font);
+    }
+
+    [[nodiscard]] auto italicOn() const -> bool { return italic_; }
+
+    // Italic state of every whitespace-separated word drawn so far. A word drawn both upright
+    // and italic is reported as inconsistent.
+    [[nodiscard]] auto wordStyles(std::vector<std::string> &inconsistent) const
+        -> std::map<std::string, bool> {
+        std::map<std::string, bool> styles;
+        for (const auto &[text, italic] : drawn_) {
+            std::istringstream words(text);
+            std::string word;
+            while (words >> word) {
+                auto [it, inserted] = styles.emplace(word, italic);
+                if (!inserted && it->second != italic) {
+                    inconsistent.push_back(word);
+                }
+            }
+        }
+        return styles;
+    }
+
+private:
+    bool italic_{false};
+    std::vector<std::pair<std::string, bool>> drawn_;
+};
+
+TEST_CASE("Renderer draws italic runs, including nested ones", "[renderer][italic]") {
+    const std::string epubPath = std::string(TESTS_DIR) + "/Fixtures/epub/italics.epub";
+    auto epub =
+        std::make_shared<EPubFile>(std::make_shared<PosixUnzipperFileStream>(epubPath.c_str()));
+    REQUIRE(epub->isOpen());
+    auto stream = std::make_shared<EPubFileRendererStream>(epub);
+
+    const std::string fontPath = std::string(TESTS_DIR) + "/Fixtures/NotoSans-Light.ttf";
+    RecordingDisplay display(600, 800, fontPath.c_str(), 16);
+    RendererDisplayRect rect{0, 0, 600, 800};
+    FontHandle fontHandle{display.defaultFont()};
+    Renderer renderer(display, rect, fontHandle);
+    RendererDisplayRect inset{30, 30, static_cast<int16_t>(rect.width - 60),
+                              static_cast<int16_t>(rect.height - 60)};
+    renderer.setRect(inset);
+    renderer.setStream(stream);
+
+    renderer.renderFirstPage();
+    REQUIRE(renderer.atEndOfFile());
+    CHECK_FALSE(display.italicOn());
+
+    std::vector<std::string> inconsistent;
+    const auto styles = display.wordStyles(inconsistent);
+    CHECK(inconsistent.empty());
+
+    const std::vector<std::pair<std::string, bool>> expected = {
+        // <i> containing <em>: text after the inner element stays italic
+        {"Plain", false},
+        {"The", true},
+        {"Odyssey", true},
+        {"was", true},
+        {"long", true},
+        {"afterward.", false},
+        // Nested italic-class spans
+        {"outer", true},
+        {"inner", true},
+        {"tail", true},
+        {"done", false},
+        // Compound class with <em> nested inside
+        {"alpha", true},
+        {"beta", true},
+        {"gamma", true},
+        {"delta", false},
+        // A non-italic span inside <i> doesn't end the italic run
+        {"first", true},
+        {"second", true},
+        {"third", true},
+        {"fourth", false},
+        // Superscript inside <i> stays italic
+        {"note2", true},
+        {"ending", true},
+        {"closing", false},
+        // Bold isn't italic
+        {"strongword", false},
+        {"boldword", false},
+        {"regular", false},
+    };
+    for (const auto &[word, italic] : expected) {
+        INFO("word '" << word << "'");
+        auto it = styles.find(word);
+        REQUIRE(it != styles.end());
+        CHECK(it->second == italic);
+    }
 }
