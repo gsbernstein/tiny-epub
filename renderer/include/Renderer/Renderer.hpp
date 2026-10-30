@@ -32,6 +32,9 @@ public:
     [[nodiscard]] auto getLineSpacing() const -> int { return pager_.getLineSpacing(); }
     void setLineSpacing(int newSpacing) { pager_.setLineSpacing(newSpacing); }
 
+    [[nodiscard]] auto getWordSpacing() const -> int { return pager_.getWordSpacing(); }
+    void setWordSpacing(int newSpacing) { pager_.setWordSpacing(newSpacing); }
+
     auto setFont(FontHandle font) -> void {
         font_ = font;
         pager_.setFont(font_);

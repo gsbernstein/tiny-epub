@@ -40,6 +40,7 @@ private:
     MenuParameters menuParameters_;
 
     int lineSpacing_{0};
+    int wordSpacing_{0};
 
     FontHandle font_{};
 
@@ -89,6 +90,9 @@ public:
 
     [[nodiscard]] auto getLineSpacing() const -> int { return lineSpacing_; }
     void setLineSpacing(int newSpacing) { lineSpacing_ = newSpacing; }
+
+    [[nodiscard]] auto getWordSpacing() const -> int { return wordSpacing_; }
+    void setWordSpacing(int newSpacing) { wordSpacing_ = newSpacing; }
 
     void setFont(FontHandle font) { font_ = font; }
 
@@ -205,7 +209,7 @@ public:
         }
     }
 
-    inline void addSpaceWidth() { currentLineWidth_ += spaceWidth_; }
+    inline void addSpaceWidth() { currentLineWidth_ += (spaceWidth_ + wordSpacing_); }
 
     [[nodiscard]] inline auto deciToPix(uint16_t decilineValue) const -> uint16_t {
         return (getLineHeightPlusSpacing() * decilineValue) / NEWLINE_DECI_LINE_HEIGHT;
