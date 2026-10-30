@@ -1,5 +1,6 @@
 #include "EPubTokenizer.hpp"
 
+#include <cstring>
 #include <string>
 
 // clang-format off
@@ -504,7 +505,7 @@ auto EPubTokenizer::loadAndTokenizePage(StreamPlace fromPlace, bool backwards, S
 
     superscript_ = false;
     subscript_ = false;
-    italic_ = false;
+    italicDepth_ = 0;
 
     // ----> 8) To add brackets around hyperlinks
 
@@ -932,6 +933,13 @@ auto EPubTokenizer::processMenuParameters(pugi::xml_node node) -> bool {
 // Process node content, going recursively for all its parts. Returns true if parsing must
 // continue, false if its time to stop (We are at the end of a page (going forward) or the
 // toPlace_ has been reached (going backward))
+// True for an element whose class marks italic text, e.g. class="italic" or class="calibre emph".
+// Opening and closing tags of the same element both use this, keeping the italic depth balanced.
+static auto hasItalicClass(pugi::xml_node node) -> bool {
+    const char *classStr = node.attribute("class").value();
+    return (strstr(classStr, "italic") != nullptr) || (strstr(classStr, "emph") != nullptr);
+}
+
 auto EPubTokenizer::interpret(pugi::xml_node node) -> bool {
     RENDERER_CHECK_STACK_WATERMARK();
 
@@ -1039,26 +1047,17 @@ auto EPubTokenizer::interpret(pugi::xml_node node) -> bool {
                 if (tokenizingStarted_ && closeTextToken()) {
                     return false;
                 }
-                italic_ = true;
+                italicDepth_++;
                 break;
 
-            case Tag::SPAN: {
-                // Check for CSS class-based italic styling
-                pugi::xml_attribute classAttr = node.attribute("class");
-                if (classAttr) {
-                    const char *classStr = classAttr.value();
-                    // Check for common italic class names
-                    // Only match "italic" or "emph" - avoid false positive matching of "i" substring
-                    if (classStr && (strstr(classStr, "italic") != nullptr ||
-                                     strstr(classStr, "emph") != nullptr)) {
-                        if (tokenizingStarted_ && closeTextToken()) {
-                            return false;
-                        }
-                        italic_ = true;
+            case Tag::SPAN:
+                if (hasItalicClass(node)) {
+                    if (tokenizingStarted_ && closeTextToken()) {
+                        return false;
                     }
+                    italicDepth_++;
                 }
                 break;
-            }
 
             case Tag::OL:
                 if (tokenizingStarted_) {
@@ -1308,28 +1307,24 @@ auto EPubTokenizer::interpret(pugi::xml_node node) -> bool {
 
                 case Tag::I:
                 case Tag::EM:
-                    italic_ = false;
+                    if (italicDepth_ > 0) {
+                        italicDepth_--;
+                    }
                     if (tokenizingStarted_ && closeTextToken()) {
                         return false;
                     }
                     break;
 
-                case Tag::SPAN: {
-                    // Check if this span had italic class and close it
-                    pugi::xml_attribute classAttr = node.attribute("class");
-                    if (classAttr) {
-                        const char *classStr = classAttr.value();
-                        // Only match "italic" or "emph" - avoid false positive matching of "i" substring
-                        if (classStr && (strstr(classStr, "italic") != nullptr ||
-                                         strstr(classStr, "emph") != nullptr)) {
-                            italic_ = false;
-                            if (tokenizingStarted_ && closeTextToken()) {
-                                return false;
-                            }
+                case Tag::SPAN:
+                    if (hasItalicClass(node)) {
+                        if (italicDepth_ > 0) {
+                            italicDepth_--;
+                        }
+                        if (tokenizingStarted_ && closeTextToken()) {
+                            return false;
                         }
                     }
                     break;
-                }
 
                 case Tag::BREAK:
                     if (tokenizingStarted_) {
@@ -1564,6 +1559,7 @@ auto EPubTokenizer::addStrToPage(const pugi::char_t *str, uint32_t len) -> bool 
             Token &newToken = tokens_.getNextAvailable();
             newToken.streamPlace = {streamOffset, currentSpineIdx_};
             newToken.tokenId = TokenId::TEXT;
+            newToken.isItalic = inItalic();
 
             do {
                 auto script = display_.getSuperscriptCharacter(curChar, font_);
@@ -1590,6 +1586,7 @@ auto EPubTokenizer::addStrToPage(const pugi::char_t *str, uint32_t len) -> bool 
             Token &newToken = tokens_.getNextAvailable();
             newToken.streamPlace = {streamOffset, currentSpineIdx_};
             newToken.tokenId = TokenId::TEXT;
+            newToken.isItalic = inItalic();
 
             do {
                 auto script = display_.getSubscriptCharacter(curChar, font_);
@@ -1621,6 +1618,7 @@ auto EPubTokenizer::addStrToPage(const pugi::char_t *str, uint32_t len) -> bool 
                 textToken_ = &tokens_.getNextAvailable();
                 textToken_->streamPlace = {streamOffset, currentSpineIdx_};
                 textToken_->tokenId = TokenId::SUPTEXT;
+                textToken_->isItalic = inItalic();
 
             } else if (subscript_) {
                 subscript_ = false;
@@ -1628,6 +1626,7 @@ auto EPubTokenizer::addStrToPage(const pugi::char_t *str, uint32_t len) -> bool 
                 textToken_ = &tokens_.getNextAvailable();
                 textToken_->streamPlace = {streamOffset, currentSpineIdx_};
                 textToken_->tokenId = TokenId::SUBTEXT;
+                textToken_->isItalic = inItalic();
 
             } else
 #endif
@@ -1636,7 +1635,7 @@ auto EPubTokenizer::addStrToPage(const pugi::char_t *str, uint32_t len) -> bool 
                 textToken_ = &tokens_.getNextAvailable();
                 textToken_->streamPlace = {streamOffset, currentSpineIdx_};
                 textToken_->tokenId = TokenId::TEXT;
-                textToken_->isItalic = italic_;
+                textToken_->isItalic = inItalic();
 
                 textCharCount_ = 0;
             }

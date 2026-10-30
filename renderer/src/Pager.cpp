@@ -363,7 +363,8 @@ void Pager::drawSingleLine(LineInfo &lineInfo, int yPos) const {
         int theYPos = yPos;
 
 #if CONFIG_EPUB_RENDERER_NATIVE_SUPERSUBSCRIPT_CHARACTERS
-        if ((static_cast<uint16_t>(tokenId) & SUPSUB_TOKENS) != 0) {
+        const bool isSupSub = (static_cast<uint16_t>(tokenId) & SUPSUB_TOKENS) != 0;
+        if (isSupSub) {
 
             int32_t yOffset = getLineHeightPlusSpacing() / 5;
             auto normalHeight = getLineHeightPlusSpacing();
@@ -375,9 +376,6 @@ void Pager::drawSingleLine(LineInfo &lineInfo, int yPos) const {
             } else { // TokenId::SUPTEXT
                 theYPos += normalHeight - getLineHeightPlusSpacing() - yOffset;
             }
-            xPos = display_.drawSingleLineOfText(lineSegment.data(), xPos, theYPos, false, font_);
-            display_.setNormalFontSize(font_);
-            continue;
         }
 #endif
 
@@ -388,6 +386,12 @@ void Pager::drawSingleLine(LineInfo &lineInfo, int yPos) const {
         if (isItalic) {
             display_.setItalicFont(font_, false);
         }
+
+#if CONFIG_EPUB_RENDERER_NATIVE_SUPERSUBSCRIPT_CHARACTERS
+        if (isSupSub) {
+            display_.setNormalFontSize(font_);
+        }
+#endif
     }
 }
 

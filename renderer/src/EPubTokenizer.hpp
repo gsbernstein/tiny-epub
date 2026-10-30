@@ -168,8 +168,10 @@ private:
     // true when a <SUB></SUB> if being processed
     bool subscript_{};
 
-    // true when <i>, <em>, or <strong> is being processed (italic formatting)
-    bool italic_{};
+    // Number of enclosing italic elements (<i>, <em>, or a <span> with an italic class). Text is
+    // italic while this is non-zero, so closing a nested italic element doesn't end the outer one.
+    uint8_t italicDepth_{};
+    [[nodiscard]] auto inItalic() const -> bool { return italicDepth_ > 0; }
 
     // Used to add space qty that follow a token
     Token *lastToken_{};
