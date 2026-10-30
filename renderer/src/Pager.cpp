@@ -26,6 +26,7 @@ auto Pager::addLastTokenToPage(bool dontStop) -> bool {
     case TokenId::ITEXT:
     case TokenId::HTEXT:
     case TokenId::NTEXT:
+    case TokenId::ITALIC:
 
 #if CONFIG_EPUB_RENDERER_NATIVE_SUPERSUBSCRIPT_CHARACTERS
     case TokenId::SUPTEXT:
@@ -83,7 +84,8 @@ auto Pager::addLastTokenToPage(bool dontStop) -> bool {
 
         if (static_cast<uint16_t>(token.tokenId) &
             (static_cast<uint16_t>(TokenId::TEXT) | static_cast<uint16_t>(TokenId::ITEXT) |
-             static_cast<uint16_t>(TokenId::HTEXT) | static_cast<uint16_t>(TokenId::NTEXT)
+             static_cast<uint16_t>(TokenId::HTEXT) | static_cast<uint16_t>(TokenId::NTEXT) |
+             static_cast<uint16_t>(TokenId::ITALIC)
 #if CONFIG_EPUB_RENDERER_NATIVE_SUPERSUBSCRIPT_CHARACTERS
              | static_cast<uint16_t>(TokenId::SUBTEXT) | static_cast<uint16_t>(TokenId::SUPTEXT)
 #endif
@@ -263,7 +265,8 @@ auto Pager::computeWordCount() const -> uint16_t {
              tokens_.nextTokenIdx(tokenIdx)) {
             if (static_cast<uint16_t>(tokens_[tokenIdx].tokenId) &
                 (static_cast<uint16_t>(TokenId::TEXT) | static_cast<uint16_t>(TokenId::ITEXT) |
-                 static_cast<uint16_t>(TokenId::HTEXT) | static_cast<uint16_t>(TokenId::NTEXT)
+                 static_cast<uint16_t>(TokenId::HTEXT) | static_cast<uint16_t>(TokenId::NTEXT) |
+                 static_cast<uint16_t>(TokenId::ITALIC)
 #if CONFIG_EPUB_RENDERER_NATIVE_SUPERSUBSCRIPT_CHARACTERS
                  | static_cast<uint16_t>(TokenId::SUBTEXT) | static_cast<uint16_t>(TokenId::SUPTEXT)
 #endif
@@ -294,13 +297,20 @@ auto Pager::getLineSegment(LineInfo &lineInfo, Idx nextTokenIdx, Idx endTokenIdx
 
     Idx tokenIdx = nextTokenIdx;
     bool first = true;
+    bool firstTokenItalic = tokens_[tokenIdx].isItalic;
     while (tokenIdx != endTokenIdx) {
 
         auto tokenId = tokens_[tokenIdx].tokenId;
+        bool tokenItalic = tokens_[tokenIdx].isItalic;
 
         if (!first &&
             (static_cast<uint16_t>(tokenId) & (static_cast<uint16_t>(TokenId::SUBTEXT) |
                                                static_cast<uint16_t>(TokenId::SUPTEXT))) != 0) {
+            break;
+        }
+
+        // Break segment if italic state changes
+        if (!first && (tokenItalic != firstTokenItalic)) {
             break;
         }
 
@@ -336,7 +346,7 @@ auto Pager::getLineSegment(LineInfo &lineInfo, Idx nextTokenIdx, Idx endTokenIdx
 }
 
 // Draw a line on screen. A line is composed of potentially multiple segments, some are subscript or
-// superscript for which a y offset must be applied.
+// superscript for which a y offset must be applied, and some may be italic.
 void Pager::drawSingleLine(LineInfo &lineInfo, int yPos) const {
 
     Line lineSegment;
@@ -348,6 +358,7 @@ void Pager::drawSingleLine(LineInfo &lineInfo, int yPos) const {
     while (nextTokenIdx != endTokenIdx) {
 
         auto tokenId = tokens_[nextTokenIdx].tokenId;
+        bool isItalic = tokens_[nextTokenIdx].isItalic;
 
         nextTokenIdx = getLineSegment(lineInfo, nextTokenIdx, endTokenIdx, lineSegment);
 
@@ -369,7 +380,13 @@ void Pager::drawSingleLine(LineInfo &lineInfo, int yPos) const {
             xPos = display_.drawSingleLineOfText(lineSegment.data(), xPos, theYPos, false, font_);
             display_.setNormalFontSize(font_);
         } else {
+            if (isItalic) {
+                display_.setItalicFont(font_, true);
+            }
             xPos = display_.drawSingleLineOfText(lineSegment.data(), xPos, yPos, false, font_);
+            if (isItalic) {
+                display_.setItalicFont(font_, false);
+            }
         }
     }
 }

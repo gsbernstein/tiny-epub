@@ -114,13 +114,15 @@ enum class TokenId : uint16_t {
         1 << 12,      // Embedded in page picture (between paragraphs) More than one can be present
     HRULE = 1 << 13,  // Horizontal line
     BTABLE = 1 << 14, // Beginning of a table
-    ETABLE = 1 << 15  // End of table
+    ETABLE = 1 << 15, // End of table
+    ITALIC = 1 << 16  // <i>, <em> text (italic formatting)
 };
 
 #if REND_DEBUG
 static const char *TokenIdStr[] = {
     "TEXT",   "ITEXT",  "HTEXT",  "NTEXT",   "SUPTEXT",  "SUBTEXT", "NEWLINE", "ENDPARAGRAPH",
-    "HYPHEN", "ENDASH", "EMDASH", "PICTURE", "EPICTURE", "HRULE",   "BTABLE",  "ËTABLE"};
+    "HYPHEN", "ENDASH", "EMDASH", "PICTURE", "EPICTURE", "HRULE",   "BTABLE",  "ËTABLE",
+    "ITALIC"};
 #endif
 #else
 // These are the different tokens so as we parse a buffer, we more easily know what to do with the
@@ -140,13 +142,14 @@ enum class TokenId : uint16_t {
         1 << 10,      // Embedded in page picture (between paragraphs) More than one can be present
     HRULE = 1 << 11,  // Horizontal line
     BTABLE = 1 << 12, // Beginning of a table
-    ETABLE = 1 << 13  // End of table
+    ETABLE = 1 << 13, // End of table
+    ITALIC = 1 << 14  // <i>, <em> text (italic formatting)
 };
 
 #if REND_DEBUG
 static const char *TokenIdStr[] = {"TEXT",         "ITEXT",  "HTEXT",  "NTEXT",  "NEWLINE",
                                    "ENDPARAGRAPH", "HYPHEN", "ENDASH", "EMDASH", "PICTURE",
-                                   "EPICTURE",     "HRULE",  "BTABLE", "ËTABLE"};
+                                   "EPICTURE",     "HRULE",  "BTABLE", "ËTABLE", "ITALIC"};
 #endif
 
 #endif
@@ -154,7 +157,7 @@ static const char *TokenIdStr[] = {"TEXT",         "ITEXT",  "HTEXT",  "NTEXT", 
 // BitMask of all token ids that are using the pool space
 static const uint16_t POOL_TOKENS =
     static_cast<uint16_t>(TokenId::TEXT) | static_cast<uint16_t>(TokenId::ITEXT) |
-    static_cast<uint16_t>(TokenId::HTEXT)
+    static_cast<uint16_t>(TokenId::HTEXT) | static_cast<uint16_t>(TokenId::ITALIC)
 #if CONFIG_EPUB_RENDERER_NATIVE_SUPERSUBSCRIPT_CHARACTERS
     | static_cast<uint16_t>(TokenId::SUBTEXT) | static_cast<uint16_t>(TokenId::SUPTEXT)
 #endif
@@ -220,6 +223,7 @@ struct Token {
     uint16_t length{};    // Length in bytes
     TokenId tokenId{TokenId::TEXT};
     uint8_t spacesAfter{};
+    bool isItalic{};      // True if text should be rendered in italic
 };
 
 struct LineInfo {

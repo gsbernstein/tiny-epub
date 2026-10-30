@@ -51,6 +51,7 @@ public:
     // For fonts that can set their size
     virtual inline void setSupSubFontSize(FontHandle font) {}
     virtual inline void setNormalFontSize(FontHandle font) {}
+    virtual inline void setItalicFont(FontHandle font, bool italic) {}
 
     // Returns the x position after drawing the text (advance)
     virtual int16_t drawSingleLineOfText(const char *cstr, int16_t x, int16_t y, bool invert,

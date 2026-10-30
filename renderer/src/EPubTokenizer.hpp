@@ -168,6 +168,9 @@ private:
     // true when a <SUB></SUB> if being processed
     bool subscript_{};
 
+    // true when <i>, <em>, or <strong> is being processed (italic formatting)
+    bool italic_{};
+
     // Used to add space qty that follow a token
     Token *lastToken_{};
 

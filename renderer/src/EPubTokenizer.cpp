@@ -504,6 +504,7 @@ auto EPubTokenizer::loadAndTokenizePage(StreamPlace fromPlace, bool backwards, S
 
     superscript_ = false;
     subscript_ = false;
+    italic_ = false;
 
     // ----> 8) To add brackets around hyperlinks
 
@@ -1033,6 +1034,15 @@ auto EPubTokenizer::interpret(pugi::xml_node node) -> bool {
                 subscript_ = true;
                 break;
 
+            case Tag::I:
+            case Tag::EM:
+            case Tag::STRONG:
+                if (tokenizingStarted_ && closeTextToken()) {
+                    return false;
+                }
+                italic_ = true;
+                break;
+
             case Tag::OL:
                 if (tokenizingStarted_) {
                     if (closeTextToken()) {
@@ -1274,6 +1284,15 @@ auto EPubTokenizer::interpret(pugi::xml_node node) -> bool {
 
                 case Tag::SUB:
                     subscript_ = false;
+                    if (tokenizingStarted_ && closeTextToken()) {
+                        return false;
+                    }
+                    break;
+
+                case Tag::I:
+                case Tag::EM:
+                case Tag::STRONG:
+                    italic_ = false;
                     if (tokenizingStarted_ && closeTextToken()) {
                         return false;
                     }
@@ -1584,6 +1603,7 @@ auto EPubTokenizer::addStrToPage(const pugi::char_t *str, uint32_t len) -> bool 
                 textToken_ = &tokens_.getNextAvailable();
                 textToken_->streamPlace = {streamOffset, currentSpineIdx_};
                 textToken_->tokenId = TokenId::TEXT;
+                textToken_->isItalic = italic_;
 
                 textCharCount_ = 0;
             }
