@@ -315,7 +315,14 @@ auto Pager::getLineSegment(LineInfo &lineInfo, Idx nextTokenIdx, Idx endTokenIdx
             }
 
             if (tokens_[tokenIdx].spacesAfter) {
-                lineSegment[lineIdx++] = ' ';
+                // Base space (1) plus extra spaces based on word spacing
+                int totalSpaces = 1 + wordSpacing_;
+                if (totalSpaces < 1) {
+                    totalSpaces = 1;
+                }
+                for (int i = 0; i < totalSpaces; i++) {
+                    lineSegment[lineIdx++] = ' ';
+                }
             }
         }
 
@@ -394,11 +401,17 @@ void Pager::getLine(LineInfo &lineStruct, Line &line) const {
                 lineIdx += tokens_[tokenIdx].length;
             }
             if (tokens_[tokenIdx].spacesAfter) {
-                line[lineIdx++] = ' ';
+                // Base space (1) plus extra spaces based on word spacing
+                // Negative values reduce spacing, positive values increase spacing
+                int totalSpaces = 1 + wordSpacing_;
+                // Ensure at least 1 space (or 0 for very negative values, but typically >= 1)
+                if (totalSpaces < 1) {
+                    totalSpaces = 1;
+                }
+                for (int i = 0; i < totalSpaces; i++) {
+                    line[lineIdx++] = ' ';
+                }
             }
-            // for (int i = 0; i < tokens_[tokenIdx].spacesAfter; i++) {
-            //     line[lineIdx++] = ' ';
-            // }
         }
     }
     line[lineIdx] = 0;
