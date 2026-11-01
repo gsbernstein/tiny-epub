@@ -389,32 +389,44 @@ TEST_CASE("Renderer renders from hardcoded string", "[renderer][txt][string]") {
     REQUIRE(renderer.getNumRenderedLines() > 0);
 }
 
-// Records each drawn string together with whether italics were on when it was drawn.
+// Records each drawn string with its position and the font state it was drawn with.
 class RecordingDisplay : public MockDisplay {
 public:
+    struct Draw {
+        std::string text;
+        int16_t x;
+        int16_t y;
+        bool italic;
+        bool supSub;
+    };
+
     using MockDisplay::MockDisplay;
 
     void setItalicFont(FontHandle, bool italic) override { italic_ = italic; }
+    void setSupSubFontSize(FontHandle) override { supSub_ = true; }
+    void setNormalFontSize(FontHandle) override { supSub_ = false; }
 
     int16_t drawSingleLineOfText(const char *cstr, int16_t x, int16_t y, bool invert,
                                  FontHandle font) override {
-        drawn_.emplace_back(cstr, italic_);
+        draws_.push_back({cstr, x, y, italic_, supSub_});
         return MockDisplay::drawSingleLineOfText(cstr, x, y, invert, font);
     }
 
     [[nodiscard]] auto italicOn() const -> bool { return italic_; }
+    [[nodiscard]] auto draws() const -> const std::vector<Draw> & { return draws_; }
+    void clearDraws() { draws_.clear(); }
 
     // Italic state of every whitespace-separated word drawn so far. A word drawn both upright
     // and italic is reported as inconsistent.
     [[nodiscard]] auto wordStyles(std::vector<std::string> &inconsistent) const
         -> std::map<std::string, bool> {
         std::map<std::string, bool> styles;
-        for (const auto &[text, italic] : drawn_) {
-            std::istringstream words(text);
+        for (const auto &draw : draws_) {
+            std::istringstream words(draw.text);
             std::string word;
             while (words >> word) {
-                auto [it, inserted] = styles.emplace(word, italic);
-                if (!inserted && it->second != italic) {
+                auto [it, inserted] = styles.emplace(word, draw.italic);
+                if (!inserted && it->second != draw.italic) {
                     inconsistent.push_back(word);
                 }
             }
@@ -424,25 +436,39 @@ public:
 
 private:
     bool italic_{false};
-    std::vector<std::pair<std::string, bool>> drawn_;
+    bool supSub_{false};
+    std::vector<Draw> draws_;
 };
 
-TEST_CASE("Renderer draws italic runs, including nested ones", "[renderer][italic]") {
-    const std::string epubPath = std::string(TESTS_DIR) + "/Fixtures/epub/italics.epub";
-    auto epub =
-        std::make_shared<EPubFile>(std::make_shared<PosixUnzipperFileStream>(epubPath.c_str()));
-    REQUIRE(epub->isOpen());
-    auto stream = std::make_shared<EPubFileRendererStream>(epub);
+namespace {
 
-    const std::string fontPath = std::string(TESTS_DIR) + "/Fixtures/NotoSans-Light.ttf";
-    RecordingDisplay display(600, 800, fontPath.c_str(), 16);
-    RendererDisplayRect rect{0, 0, 600, 800};
+const std::string FONT_PATH = std::string(TESTS_DIR) + "/Fixtures/NotoSans-Light.ttf";
+
+auto openEpubStream(const std::string &name) -> std::shared_ptr<EPubFileRendererStream> {
+    const std::string path = std::string(TESTS_DIR) + "/Fixtures/epub/" + name;
+    auto epub = std::make_shared<EPubFile>(std::make_shared<PosixUnzipperFileStream>(path.c_str()));
+    REQUIRE(epub->isOpen());
+    return std::make_shared<EPubFileRendererStream>(epub);
+}
+
+// Index of the first draw containing text, or -1.
+auto findDraw(const std::vector<RecordingDisplay::Draw> &draws, const std::string &text) -> int {
+    for (size_t i = 0; i < draws.size(); i++) {
+        if (draws[i].text.find(text) != std::string::npos) {
+            return static_cast<int>(i);
+        }
+    }
+    return -1;
+}
+
+} // namespace
+
+TEST_CASE("Renderer draws italic runs, including nested ones", "[renderer][italic]") {
+    RecordingDisplay display(600, 800, FONT_PATH.c_str(), 16);
     FontHandle fontHandle{display.defaultFont()};
-    Renderer renderer(display, rect, fontHandle);
-    RendererDisplayRect inset{30, 30, static_cast<int16_t>(rect.width - 60),
-                              static_cast<int16_t>(rect.height - 60)};
-    renderer.setRect(inset);
-    renderer.setStream(stream);
+    Renderer renderer(display, RendererDisplayRect{0, 0, 600, 800}, fontHandle);
+    renderer.setRect(RendererDisplayRect{30, 30, 540, 740});
+    renderer.setStream(openEpubStream("italics.epub"));
 
     renderer.renderFirstPage();
     REQUIRE(renderer.atEndOfFile());
@@ -475,19 +501,137 @@ TEST_CASE("Renderer draws italic runs, including nested ones", "[renderer][itali
         {"second", true},
         {"third", true},
         {"fourth", false},
-        // Superscript inside <i> stays italic
+    // Superscript inside <i> stays italic
+#if CONFIG_EPUB_RENDERER_NATIVE_SUPERSUBSCRIPT_CHARACTERS
+        {"note", true},
+        {"2", true},
+#else
         {"note2", true},
+#endif
         {"ending", true},
         {"closing", false},
         // Bold isn't italic
         {"strongword", false},
         {"boldword", false},
         {"regular", false},
+        // Link delimiters stay upright around italic link text
+        {"[See", false},
+        {"linknote", true},
+        {"]", false},
+        {"after1", false},
+        {"[plain", false},
+        {"linked]", false},
+        {"spaced", true},
+        {"after3", false},
     };
     for (const auto &[word, italic] : expected) {
         INFO("word '" << word << "'");
         auto it = styles.find(word);
         REQUIRE(it != styles.end());
         CHECK(it->second == italic);
+    }
+}
+
+TEST_CASE("Renderer closes links that end in italic text", "[renderer][italic]") {
+    RecordingDisplay display(600, 800, FONT_PATH.c_str(), 16);
+    FontHandle fontHandle{display.defaultFont()};
+    Renderer renderer(display, RendererDisplayRect{0, 0, 600, 800}, fontHandle);
+    renderer.setRect(RendererDisplayRect{30, 30, 540, 740});
+    renderer.setStream(openEpubStream("italics.epub"));
+    renderer.renderFirstPage();
+    const auto &draws = display.draws();
+
+    // The closing delimiter follows the italic word directly, with the link's trailing space
+    // after it.
+    for (const std::string word : {"linknote", "spaced"}) {
+        INFO("link ending with '" << word << "'");
+        const int idx = findDraw(draws, word);
+        REQUIRE(idx >= 0);
+        CHECK(draws[idx].text == word);
+        REQUIRE(static_cast<size_t>(idx + 1) < draws.size());
+        CHECK(draws[idx + 1].text.rfind("] ", 0) == 0);
+        CHECK(draws[idx + 1].y == draws[idx].y);
+    }
+}
+
+TEST_CASE("Renderer keeps superscripts together across italic boundaries", "[renderer][italic]") {
+    RecordingDisplay display(600, 800, FONT_PATH.c_str(), 16);
+    FontHandle fontHandle{display.defaultFont()};
+    Renderer renderer(display, RendererDisplayRect{0, 0, 600, 800}, fontHandle);
+    renderer.setRect(RendererDisplayRect{30, 30, 540, 740});
+    renderer.setStream(openEpubStream("italics.epub"));
+    renderer.renderFirstPage();
+    const auto &draws = display.draws();
+
+    // <sup>sa<i>sb</i>sc</sup>: every part keeps the superscript style; only "sb" is italic.
+    for (const std::string part : {"sa", "sb", "sc"}) {
+        INFO("superscript part '" << part << "'");
+        const int idx = findDraw(draws, part);
+        REQUIRE(idx >= 0);
+        CHECK(draws[idx].italic == (part == "sb"));
+#if CONFIG_EPUB_RENDERER_NATIVE_SUPERSUBSCRIPT_CHARACTERS
+        CHECK(draws[idx].supSub);
+#endif
+    }
+}
+
+// Pages through wrapping.epub at a narrow width and checks that no word is split across lines or
+// pages where it was only split into tokens by formatting (no space or hyphen at the break).
+TEST_CASE("Renderer wraps words split by formatting as a unit", "[renderer][italic][wrap]") {
+    RecordingDisplay display(600, 800, FONT_PATH.c_str(), 16);
+    FontHandle fontHandle{display.defaultFont()};
+    Renderer renderer(display, RendererDisplayRect{0, 0, 600, 800}, fontHandle);
+    renderer.setRect(RendererDisplayRect{30, 30, 190, 260});
+    renderer.setStream(openEpubStream("wrapping.epub"));
+
+    std::vector<std::shared_ptr<Place>> pageStarts;
+    std::vector<std::string> pageFirstTexts;
+    std::string previousText;
+    int lineBreaks = 0;
+    int hyphenBreaks = 0;
+
+    auto [nextPlace, darkPercent] = renderer.renderFirstPage();
+    (void)darkPercent;
+    for (int page = 0; page < 200; page++) {
+        pageStarts.push_back(renderer.getCurrentPlace());
+        const auto &draws = display.draws();
+        REQUIRE_FALSE(draws.empty());
+        pageFirstTexts.push_back(draws.front().text);
+
+        for (size_t i = 0; i < draws.size(); i++) {
+            // Superscripts are drawn higher, so detect a new line by x going back left.
+            const bool newLine = (i == 0) ? (page > 0) : (draws[i].x < draws[i - 1].x);
+            if (newLine) {
+                lineBreaks++;
+                INFO("page " << page << " line starting with '" << draws[i].text << "' after '"
+                             << previousText << "'");
+                CHECK(((previousText.back() == ' ') || (previousText.back() == '-')));
+                hyphenBreaks += (previousText.back() == '-') ? 1 : 0;
+            }
+            previousText = draws[i].text;
+        }
+
+        if (renderer.atEndOfFile()) {
+            break;
+        }
+        display.clearDraws();
+        std::tie(nextPlace, std::ignore) = renderer.renderPage(nextPlace);
+    }
+    REQUIRE(renderer.atEndOfFile());
+    REQUIRE(pageStarts.size() > 3);
+    CHECK(lineBreaks > 50);
+    // Lines can still break right after a hyphen inside a word.
+    CHECK(hyphenBreaks > 0);
+
+    // Paging backward must find the same page starts, so a page never starts mid-word there
+    // either.
+    for (size_t page = pageStarts.size() - 1; page > 0; page--) {
+        INFO("previous page of page " << page);
+        renderer.setCurrentPlace(pageStarts[page]);
+        auto previous = renderer.getPreviousPlace();
+        display.clearDraws();
+        renderer.renderPage(previous);
+        REQUIRE_FALSE(display.draws().empty());
+        CHECK(display.draws().front().text == pageFirstTexts[page - 1]);
     }
 }
