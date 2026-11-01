@@ -43,6 +43,18 @@ private:
 
     FontHandle font_{};
 
+    // Tokens, ending with the last one added, that start the next page once the current one is
+    // complete: that token plus any fragments of the same word moved along with it.
+    uint16_t carriedTokenCount_{1};
+
+    struct GluedRun {
+        Idx firstIdx;
+        uint16_t count;
+        uint16_t width;
+        uint16_t length;
+    };
+    [[nodiscard]] auto gluedRunBeforeLast() const -> GluedRun;
+
     [[nodiscard]] inline auto lastLineTokenIdx(Idx lineIdx) const -> Idx {
         return lines_[lineIdx].tokenIdx + lines_[lineIdx].tokenCount - 1;
     }
@@ -67,12 +79,9 @@ private:
         linesTailIdx_ = (linesTailIdx_ + 1) % LINES_SIZE;
     }
 
-#if CONFIG_EPUB_RENDERER_NATIVE_SUPERSUBSCRIPT_CHARACTERS
     auto getLineSegment(LineInfo &lineInfo, Idx tokenIdx, Idx endTokenIdx, Line &line) const -> Idx;
     void drawSingleLine(LineInfo &lineInfo, int yPos) const;
-#else
     void getLine(LineInfo &lineStruct, Line &line) const;
-#endif
 
     auto computeDarkPercent(const uint8_t *bitmap, uint16_t width, uint16_t height) const
         -> uint8_t;
@@ -137,6 +146,7 @@ public:
     // Returns false if the last token is not part of the page.
     // The token will be the first to appear on next page.
     [[nodiscard]] auto addLastTokenToPage(bool dontStop = false) -> bool;
+    [[nodiscard]] auto getCarriedTokenCount() const -> uint16_t { return carriedTokenCount_; }
     [[nodiscard]] auto computeWordCount() const -> uint16_t;
 
     [[nodiscard]] inline auto linesIsFull() const -> bool {

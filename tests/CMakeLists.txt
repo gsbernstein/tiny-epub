@@ -54,6 +54,12 @@ target_compile_definitions(renderer PUBLIC
     CONFIG_EPUB_RENDERER_MAX_BYTES_PER_LINE=1024
     CONFIG_EPUB_RENDERER_LINES_SIZE=256)
 
+# Configure with -DTINY_EPUB_NATIVE_SUPSUB=ON to test the native superscript/subscript token mode
+option(TINY_EPUB_NATIVE_SUPSUB "Render superscripts and subscripts with native glyphs" OFF)
+if(TINY_EPUB_NATIVE_SUPSUB)
+    target_compile_definitions(renderer PUBLIC CONFIG_EPUB_RENDERER_NATIVE_SUPERSUBSCRIPT_CHARACTERS=1)
+endif()
+
 add_executable(tests_epub
     ${CMAKE_CURRENT_LIST_DIR}/TestEPubFile.cpp
 )
@@ -110,3 +116,4 @@ add_test(NAME epubfile_basic_load COMMAND tests_epub)
 add_test(NAME renderer_epub_render COMMAND tests_renderer)
 add_test(NAME renderer_txt_file COMMAND tests_renderer "[renderer][txt][file]")
 add_test(NAME renderer_txt_string COMMAND tests_renderer "[renderer][txt][string]")
+add_test(NAME renderer_italic COMMAND tests_renderer "[renderer][italic]")

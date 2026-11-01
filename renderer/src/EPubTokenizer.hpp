@@ -162,11 +162,15 @@ private:
     StreamPlace *toPlace_{};
     bool backwards_{};
 
-    // true when a <SUP></SUP> if being processed
-    bool superscript_{};
+    // Number of enclosing <SUP> / <SUB> elements. Every text token created inside one is rendered
+    // as superscript / subscript, even if it is split by other formatting or whitespace.
+    uint8_t superscriptDepth_{};
+    uint8_t subscriptDepth_{};
 
-    // true when a <SUB></SUB> if being processed
-    bool subscript_{};
+    // Number of enclosing italic elements (<i>, <em>, or a <span> with an italic class). Text is
+    // italic while this is non-zero, so closing a nested italic element doesn't end the outer one.
+    uint8_t italicDepth_{};
+    [[nodiscard]] auto inItalic() const -> bool { return italicDepth_ > 0; }
 
     // Used to add space qty that follow a token
     Token *lastToken_{};
@@ -277,6 +281,7 @@ private:
     }
 
     void startNewPageWithToken(Token &token, const char *str, uint8_t strSize);
+    auto addPostTextToken() -> bool;
 
     auto addTokenToPage(Token &token, const char *str = nullptr, uint8_t strSize = 0) -> bool;
     auto findNodeEndOffset(pugi::xml_node node) -> uint32_t;

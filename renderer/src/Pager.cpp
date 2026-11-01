@@ -1,5 +1,12 @@
 #include "Pager.hpp"
 
+#if CONFIG_EPUB_RENDERER_NATIVE_SUPERSUBSCRIPT_CHARACTERS
+static constexpr uint16_t SUPSUB_TOKENS =
+    static_cast<uint16_t>(TokenId::SUBTEXT) | static_cast<uint16_t>(TokenId::SUPTEXT);
+#else
+static constexpr uint16_t SUPSUB_TOKENS = 0;
+#endif
+
 // Takes the last token entered in the tokens_[] array and include it in the page.
 //
 // The dontStop parameter is used in the context of the TXT file format when going backward, such
@@ -11,6 +18,7 @@
 auto Pager::addLastTokenToPage(bool dontStop) -> bool {
 
     Token &token = tokens_.getLast();
+    carriedTokenCount_ = 1;
 
 #if REND_DEBUG
     LOGD(REND_TAG, "%s...", getTokenIdStr(token.tokenId));
@@ -50,20 +58,28 @@ auto Pager::addLastTokenToPage(bool dontStop) -> bool {
             // We are at the end of a line
 
             // LOGD(REND_TAG, "--> End of line, Line width: %" PRIu16, currentLineWidth_);
+            // Fragments of the same word as this token (split by a style change, a footnote
+            // marker or a link delimiter) move to the next line with it.
+            GluedRun run = gluedRunBeforeLast();
+            lines_[linesTailIdx_].tokenCount -= run.count;
+            lines_[linesTailIdx_].length -= run.length;
+
             // Complete the line, passing to the next one
             newLine(NEWLINE_DECI_LINE_HEIGHT);
             if (!dontStop && ((currentPageDecilineHeight_ + heightRequired) > maxDeciLines_)) {
                 // The page is complete. The current token will be the first to next page
-                setNextPagePlace(token.streamPlace);
+                carriedTokenCount_ = run.count + 1;
+                setNextPagePlace(run.count > 0 ? tokens_[run.firstIdx].streamPlace
+                                               : token.streamPlace);
                 LOGD(REND_TAG, "Page completed: %" PRIu16 " decilines. Max: %" PRIu16,
                      currentPageDecilineHeight_, maxDeciLines_);
                 return false;
             }
             // The page is not complete, the current token is the first to appear on next line
-            currentLineWidth_ += token.pixWidth;
-            lines_[linesTailIdx_].tokenIdx = tokens_.getLastIdx();
-            lines_[linesTailIdx_].tokenCount++;
-            lines_[linesTailIdx_].length += token.length;
+            currentLineWidth_ += run.width + token.pixWidth;
+            lines_[linesTailIdx_].tokenIdx = (run.count > 0) ? run.firstIdx : tokens_.getLastIdx();
+            lines_[linesTailIdx_].tokenCount += run.count + 1;
+            lines_[linesTailIdx_].length += run.length + token.length;
         } else if (lines_[linesTailIdx_].tokenCount == 0) {
             if (!dontStop && ((currentPageDecilineHeight_ + heightRequired) > maxDeciLines_)) {
                 setNextPagePlace(token.streamPlace);
@@ -239,6 +255,48 @@ void Pager::newLine(uint16_t height) {
     // LOGD(REND_TAG, "NewLine left Indent: %" PRIu16, leftIndent_);
 };
 
+// Finds the tokens at the end of the current line that belong to the same word as the last token
+// added: consecutive text tokens with no space between them. A break is still allowed after a
+// hyphen. Returns an empty run if the word starts the line (it has to be broken somewhere) or if it
+// wouldn't fit on an empty line either.
+auto Pager::gluedRunBeforeLast() const -> GluedRun {
+    GluedRun run{tokens_.getLastIdx(), 0, 0, 0};
+    const LineInfo &line = lines_[linesTailIdx_];
+    if ((line.tokenCount == 0) ||
+        (tokens_.addToTokenIdx(line.tokenIdx, line.tokenCount) != tokens_.getLastIdx())) {
+        return run;
+    }
+
+    static constexpr uint16_t GLUEABLE_TOKENS =
+        static_cast<uint16_t>(TokenId::TEXT) | static_cast<uint16_t>(TokenId::NTEXT) |
+        static_cast<uint16_t>(TokenId::HTEXT) | SUPSUB_TOKENS;
+
+    Idx idx = tokens_.getLastIdx();
+    while (run.count < line.tokenCount) {
+        Idx prevIdx = idx;
+        tokens_.prevTokenIdx(prevIdx);
+        const Token &prev = tokens_[prevIdx];
+        const bool endsWithHyphen =
+            (prev.cStr != nullptr) && (prev.length > 0) && (prev.cStr[prev.length - 1] == '-');
+        if ((prev.spacesAfter != 0) || endsWithHyphen ||
+            ((static_cast<uint16_t>(prev.tokenId) & GLUEABLE_TOKENS) == 0)) {
+            break;
+        }
+        idx = prevIdx;
+        run.count++;
+        run.width += prev.pixWidth;
+        run.length += prev.length;
+    }
+
+    if ((run.count == line.tokenCount) ||
+        ((leftIndent_ + run.width + tokens_[tokens_.getLastIdx()].pixWidth) >
+         (maxLineWidth_ - rightIndent_))) {
+        return {tokens_.getLastIdx(), 0, 0, 0};
+    }
+    run.firstIdx = idx;
+    return run;
+}
+
 // Called when going back and the end place is found. Their may
 // remains a line that was not completed.
 void Pager::completeLastLine() {
@@ -283,10 +341,8 @@ auto Pager::getPageLength() const -> uint16_t {
     return length;
 }
 
-#if CONFIG_EPUB_RENDERER_NATIVE_SUPERSUBSCRIPT_CHARACTERS
-
-// Retrieve a single segment from the linsinfo. superscript and subscripts are cutting lines in
-// multiple segments.
+// Retrieve a single segment from the lineinfo. Lines are cut into multiple segments around each
+// superscript or subscript token and wherever the italic state changes.
 auto Pager::getLineSegment(LineInfo &lineInfo, Idx nextTokenIdx, Idx endTokenIdx,
                            Line &lineSegment) const -> Idx {
     lineSegment[0] = 0;
@@ -294,13 +350,18 @@ auto Pager::getLineSegment(LineInfo &lineInfo, Idx nextTokenIdx, Idx endTokenIdx
 
     Idx tokenIdx = nextTokenIdx;
     bool first = true;
+    bool firstTokenItalic = tokens_[tokenIdx].isItalic;
     while (tokenIdx != endTokenIdx) {
 
         auto tokenId = tokens_[tokenIdx].tokenId;
+        bool tokenItalic = tokens_[tokenIdx].isItalic;
 
-        if (!first &&
-            (static_cast<uint16_t>(tokenId) & (static_cast<uint16_t>(TokenId::SUBTEXT) |
-                                               static_cast<uint16_t>(TokenId::SUPTEXT))) != 0) {
+        if (!first && (static_cast<uint16_t>(tokenId) & SUPSUB_TOKENS) != 0) {
+            break;
+        }
+
+        // Break segment if italic state changes
+        if (!first && (tokenItalic != firstTokenItalic)) {
             break;
         }
 
@@ -321,9 +382,7 @@ auto Pager::getLineSegment(LineInfo &lineInfo, Idx nextTokenIdx, Idx endTokenIdx
 
         tokens_.nextTokenIdx(tokenIdx);
 
-        if (first &&
-            (static_cast<uint16_t>(tokenId) & (static_cast<uint16_t>(TokenId::SUBTEXT) |
-                                               static_cast<uint16_t>(TokenId::SUPTEXT))) != 0) {
+        if (first && (static_cast<uint16_t>(tokenId) & SUPSUB_TOKENS) != 0) {
             break;
         }
 
@@ -336,7 +395,7 @@ auto Pager::getLineSegment(LineInfo &lineInfo, Idx nextTokenIdx, Idx endTokenIdx
 }
 
 // Draw a line on screen. A line is composed of potentially multiple segments, some are subscript or
-// superscript for which a y offset must be applied.
+// superscript for which a y offset must be applied, and some may be italic.
 void Pager::drawSingleLine(LineInfo &lineInfo, int yPos) const {
 
     Line lineSegment;
@@ -347,14 +406,16 @@ void Pager::drawSingleLine(LineInfo &lineInfo, int yPos) const {
 
     while (nextTokenIdx != endTokenIdx) {
 
-        auto tokenId = tokens_[nextTokenIdx].tokenId;
+        [[maybe_unused]] auto tokenId = tokens_[nextTokenIdx].tokenId;
+        bool isItalic = tokens_[nextTokenIdx].isItalic;
 
         nextTokenIdx = getLineSegment(lineInfo, nextTokenIdx, endTokenIdx, lineSegment);
 
         int theYPos = yPos;
 
-        if ((static_cast<uint16_t>(tokenId) & (static_cast<uint16_t>(TokenId::SUBTEXT) |
-                                               static_cast<uint16_t>(TokenId::SUPTEXT))) != 0) {
+#if CONFIG_EPUB_RENDERER_NATIVE_SUPERSUBSCRIPT_CHARACTERS
+        const bool isSupSub = (static_cast<uint16_t>(tokenId) & SUPSUB_TOKENS) != 0;
+        if (isSupSub) {
 
             int32_t yOffset = getLineHeightPlusSpacing() / 5;
             auto normalHeight = getLineHeightPlusSpacing();
@@ -366,15 +427,24 @@ void Pager::drawSingleLine(LineInfo &lineInfo, int yPos) const {
             } else { // TokenId::SUPTEXT
                 theYPos += normalHeight - getLineHeightPlusSpacing() - yOffset;
             }
-            xPos = display_.drawSingleLineOfText(lineSegment.data(), xPos, theYPos, false, font_);
-            display_.setNormalFontSize(font_);
-        } else {
-            xPos = display_.drawSingleLineOfText(lineSegment.data(), xPos, yPos, false, font_);
         }
+#endif
+
+        if (isItalic) {
+            display_.setItalicFont(font_, true);
+        }
+        xPos = display_.drawSingleLineOfText(lineSegment.data(), xPos, theYPos, false, font_);
+        if (isItalic) {
+            display_.setItalicFont(font_, false);
+        }
+
+#if CONFIG_EPUB_RENDERER_NATIVE_SUPERSUBSCRIPT_CHARACTERS
+        if (isSupSub) {
+            display_.setNormalFontSize(font_);
+        }
+#endif
     }
 }
-
-#else
 
 // Prepare a line to be displayed on screen
 void Pager::getLine(LineInfo &lineStruct, Line &line) const {
@@ -403,7 +473,6 @@ void Pager::getLine(LineInfo &lineStruct, Line &line) const {
     }
     line[lineIdx] = 0;
 }
-#endif
 
 auto Pager::computeDarkPercent(const uint8_t *bitmap, uint16_t width, uint16_t height) const
     -> uint8_t {
@@ -543,14 +612,7 @@ auto Pager::displayPage(int16_t numSkipLines) -> uint8_t {
                 deciY += ENDPARAGRAPH_DECI_LINE_HEIGHT;
             }
 
-#if CONFIG_EPUB_RENDERER_NATIVE_SUPERSUBSCRIPT_CHARACTERS
             drawSingleLine(lines_[lineIdx], deciToPix(deciY));
-#else
-            Line line;
-            getLine(lines_[lineIdx], line);
-            display_.drawSingleLineOfText(line.data(), rect_.x + lines_[lineIdx].leftIndent,
-                                          rect_.y + deciToPix(deciY), false, font_);
-#endif
             deciY += NEWLINE_DECI_LINE_HEIGHT;
             break;
 
@@ -561,33 +623,20 @@ auto Pager::displayPage(int16_t numSkipLines) -> uint8_t {
                               display_.getForegroundColor());
             deciY += HRULE_DECI_LINE_HEIGHT;
 
-#if CONFIG_EPUB_RENDERER_NATIVE_SUPERSUBSCRIPT_CHARACTERS
             drawSingleLine(lines_[lineIdx], deciToPix(deciY));
-#else
-            Line line;
-            getLine(lines_[lineIdx], line);
-            display_.drawSingleLineOfText(line.data(), rect_.x + lines_[lineIdx].leftIndent,
-                                          rect_.y + deciToPix(deciY), false, font_);
-#endif
             deciY += NEWLINE_DECI_LINE_HEIGHT + ENDPARAGRAPH_DECI_LINE_HEIGHT;
         } break;
 
         default:
             // Only draw the lines if it's not skipped from the caller.
             if (lineNbr >= numSkipLines) {
-#if CONFIG_EPUB_RENDERER_NATIVE_SUPERSUBSCRIPT_CHARACTERS
-                drawSingleLine(lines_[lineIdx], deciToPix(deciY));
-#else
+#if !CONFIG_EPUB_RENDERER_NATIVE_SUPERSUBSCRIPT_CHARACTERS
                 Line line;
                 getLine(lines_[lineIdx], line);
-                // LOGD(REND_TAG, "Real line width: %" PRIu16 " indent: %" PRIu16,
-                //       display_.getTextWidth(line.data(), font_) + lines_[lineIdx].leftIndent,
-                //       lines_[lineIdx].leftIndent);
                 LOGD(REND_TAG, "[%" PRIu16 "] %s: <%s>", lineIdx, token.streamPlace.str().c_str(),
                      line.data());
-                display_.drawSingleLineOfText(line.data(), rect_.x + lines_[lineIdx].leftIndent,
-                                              rect_.y + deciToPix(deciY), false, font_);
 #endif
+                drawSingleLine(lines_[lineIdx], deciToPix(deciY));
             } else {
                 LOGD(REND_TAG, "[%" PRIu16 "] %s: <SKIPPED>", lineIdx,
                      token.streamPlace.str().c_str());

@@ -220,6 +220,7 @@ struct Token {
     uint16_t length{};    // Length in bytes
     TokenId tokenId{TokenId::TEXT};
     uint8_t spacesAfter{};
+    bool isItalic{};      // True if text should be rendered in italic
 };
 
 struct LineInfo {

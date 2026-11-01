@@ -1,6 +1,9 @@
 #include "EPubTokenizer.hpp"
 
+#include <cstring>
 #include <string>
+#include <utility>
+#include <vector>
 
 // clang-format off
 
@@ -502,8 +505,9 @@ auto EPubTokenizer::loadAndTokenizePage(StreamPlace fromPlace, bool backwards, S
 
     // ----> 7) To have supercript/subscript properly processed
 
-    superscript_ = false;
-    subscript_ = false;
+    superscriptDepth_ = 0;
+    subscriptDepth_ = 0;
+    italicDepth_ = 0;
 
     // ----> 8) To add brackets around hyperlinks
 
@@ -748,12 +752,53 @@ void EPubTokenizer::processPictureTag(pugi::xml_node node) {
     }
 }
 
+// Emits postText_ (the link closing delimiter) as its own token after the previous word was
+// already closed. It takes over the spaces that followed that word so the two stay attached.
+// Returns true if the page is completed.
+auto EPubTokenizer::addPostTextToken() -> bool {
+    uint8_t spacesAfterWord = 0;
+    if (lastToken_ != nullptr) {
+        spacesAfterWord = lastToken_->spacesAfter;
+        lastToken_->spacesAfter = 0;
+    }
+
+    textToken_ = &tokens_.getNextAvailable();
+    textToken_->streamPlace = {currentStreamOffset_, currentSpineIdx_};
+    textToken_->tokenId = TokenId::TEXT;
+    textToken_->isItalic = inItalic();
+    tokens_.addBytes(*textToken_, postText_);
+
+    if (closeTextToken()) {
+        return true;
+    }
+    if (lastToken_ != nullptr) {
+        lastToken_->spacesAfter = spacesAfterWord;
+    }
+    return false;
+}
+
 // Start a new page. As the token parameter is a reference into the tokens_[] array that was not
 // injected in last page, we need to take a copy of it to re-inject into the tokens_[] after it
 // was cleared (the token parameter was not accepted to be part of the previous page, so we need
 // to keep it alive in the next page to come). This must also take care of the cStr pool pointer
 // unless a str parameter is present, meaning a constant string that is outside of the pool.
 void EPubTokenizer::startNewPageWithToken(Token &token, const char *str, uint8_t strSize) {
+
+    // Fragments of the same word that the pager moved along with the token (no space between them)
+    // also start the new page, ahead of it. They're plain text tokens from the cStr pool.
+    std::vector<std::pair<Token, std::string>> fragments;
+    Idx fragmentIdx = tokens_.getLastIdx();
+    for (uint16_t i = 1; i < pager_.getCarriedTokenCount(); i++) {
+        tokens_.prevTokenIdx(fragmentIdx);
+    }
+    for (uint16_t i = 1; i < pager_.getCarriedTokenCount(); i++) {
+        Token fragment = tokens_.tokenAt(fragmentIdx);
+        std::string fragmentStr = (fragment.cStr != nullptr) ? fragment.cStr : "";
+        fragment.cStr = nullptr;
+        fragment.length = 0;
+        fragments.emplace_back(fragment, std::move(fragmentStr));
+        tokens_.nextTokenIdx(fragmentIdx);
+    }
 
     Token tempToken;
     std::string tempStr;
@@ -767,7 +812,17 @@ void EPubTokenizer::startNewPageWithToken(Token &token, const char *str, uint8_t
     tokens_.clear();
     pager_.clear();
 
-    updatePagerIndent(tempToken.tokenId == TokenId::ITEXT);
+    updatePagerIndent((fragments.empty() ? tempToken : fragments.front().first).tokenId ==
+                      TokenId::ITEXT);
+
+    for (auto &[fragment, fragmentStr] : fragments) {
+        Token &fragmentToken = tokens_.getNextAvailable();
+        fragmentToken = fragment;
+        if (!fragmentStr.empty()) {
+            tokens_.addStr(fragmentToken, fragmentStr);
+        }
+        addTokenToPage(fragmentToken);
+    }
 
     Token &newToken = tokens_.getNextAvailable();
     newToken = tempToken;
@@ -814,7 +869,7 @@ auto EPubTokenizer::addTokenToPage(Token &token, const char *str, uint8_t strSiz
                  (static_cast<uint16_t>(TokenId::NEWLINE) |
                   static_cast<uint16_t>(TokenId::ENDPARAGRAPH))) == 0) {
                 if (backwards_) {
-                    if (token.streamPlace >= *toPlace_) {
+                    if (pager_.getNextPageStreamPlace() >= *toPlace_) {
                         // So we are at the location corresponding to the end of the requested
                         // page.
                         pageCompleted_ = true;
@@ -931,6 +986,13 @@ auto EPubTokenizer::processMenuParameters(pugi::xml_node node) -> bool {
 // Process node content, going recursively for all its parts. Returns true if parsing must
 // continue, false if its time to stop (We are at the end of a page (going forward) or the
 // toPlace_ has been reached (going backward))
+// True for an element whose class marks italic text, e.g. class="italic" or class="calibre emph".
+// Opening and closing tags of the same element both use this, keeping the italic depth balanced.
+static auto hasItalicClass(pugi::xml_node node) -> bool {
+    const char *classStr = node.attribute("class").value();
+    return (strstr(classStr, "italic") != nullptr) || (strstr(classStr, "emph") != nullptr);
+}
+
 auto EPubTokenizer::interpret(pugi::xml_node node) -> bool {
     RENDERER_CHECK_STACK_WATERMARK();
 
@@ -1023,14 +1085,31 @@ auto EPubTokenizer::interpret(pugi::xml_node node) -> bool {
                 if (tokenizingStarted_ && closeTextToken()) {
                     return false;
                 }
-                superscript_ = true;
+                superscriptDepth_++;
                 break;
 
             case Tag::SUB:
                 if (tokenizingStarted_ && closeTextToken()) {
                     return false;
                 }
-                subscript_ = true;
+                subscriptDepth_++;
+                break;
+
+            case Tag::I:
+            case Tag::EM:
+                if (tokenizingStarted_ && closeTextToken()) {
+                    return false;
+                }
+                italicDepth_++;
+                break;
+
+            case Tag::SPAN:
+                if (hasItalicClass(node)) {
+                    if (tokenizingStarted_ && closeTextToken()) {
+                        return false;
+                    }
+                    italicDepth_++;
+                }
                 break;
 
             case Tag::OL:
@@ -1129,8 +1208,8 @@ auto EPubTokenizer::interpret(pugi::xml_node node) -> bool {
                 if ((v[0] != '\0') && tokenizingStarted_ && closeTextToken()) {
                     return false;
                 }
-                if (!superscript_ && !subscript_ && (v[0] != '\0') && (v[0] != '(') &&
-                    (v[0] != '[') && (v[0] != '<') && (v[0] != '{')) {
+                if ((superscriptDepth_ == 0) && (subscriptDepth_ == 0) && (v[0] != '\0') &&
+                    (v[0] != '(') && (v[0] != '[') && (v[0] != '<') && (v[0] != '{')) {
                     preText_[0] = '[';
                     postText_[0] = ']';
                     preText_[1] = postText_[1] = '\0';
@@ -1266,16 +1345,41 @@ auto EPubTokenizer::interpret(pugi::xml_node node) -> bool {
                     break;
 
                 case Tag::SUP:
-                    superscript_ = false;
+                    if (superscriptDepth_ > 0) {
+                        superscriptDepth_--;
+                    }
                     if (tokenizingStarted_ && closeTextToken()) {
                         return false;
                     }
                     break;
 
                 case Tag::SUB:
-                    subscript_ = false;
+                    if (subscriptDepth_ > 0) {
+                        subscriptDepth_--;
+                    }
                     if (tokenizingStarted_ && closeTextToken()) {
                         return false;
+                    }
+                    break;
+
+                case Tag::I:
+                case Tag::EM:
+                    if (italicDepth_ > 0) {
+                        italicDepth_--;
+                    }
+                    if (tokenizingStarted_ && closeTextToken()) {
+                        return false;
+                    }
+                    break;
+
+                case Tag::SPAN:
+                    if (hasItalicClass(node)) {
+                        if (italicDepth_ > 0) {
+                            italicDepth_--;
+                        }
+                        if (tokenizingStarted_ && closeTextToken()) {
+                            return false;
+                        }
                     }
                     break;
 
@@ -1371,14 +1475,16 @@ auto EPubTokenizer::interpret(pugi::xml_node node) -> bool {
                     break;
 
                 case Tag::A:
-                    if (tokenizingStarted_) {
-                        if ((postText_[0] != '\0') && closeTextToken(true)) {
+                    if (tokenizingStarted_ && (postText_[0] != '\0')) {
+                        if (textToken_ != nullptr) {
+                            if (closeTextToken(true)) {
+                                return false;
+                            }
+                        } else if ((preText_[0] == '\0') && addPostTextToken()) {
+                            // The opening delimiter was used but the link's last word was already
+                            // closed (e.g. by an italic element ending with the link).
                             return false;
                         }
-                        // if (postText_[0] != '\0') {
-                        //     Token &token = tokens_.getLast();
-                        //     tokens_.insertBytesAtEnd(token, postText_);
-                        // }
                     }
                     preText_[0] = postText_[0] = '\0';
                     break;
@@ -1507,11 +1613,11 @@ auto EPubTokenizer::addStrToPage(const pugi::char_t *str, uint32_t len) -> bool 
         //       (((curChar >= ' ') && (curChar < 127)) ? curChar : ' '), curChar);
 
 #if CONFIG_EPUB_RENDERER_REPLACE_SUPERSUBSCRIPT_CHARACTERS
-        if (superscript_) {
-            superscript_ = false;
+        if (superscriptDepth_ > 0) {
             Token &newToken = tokens_.getNextAvailable();
             newToken.streamPlace = {streamOffset, currentSpineIdx_};
             newToken.tokenId = TokenId::TEXT;
+            newToken.isItalic = inItalic();
 
             do {
                 auto script = display_.getSuperscriptCharacter(curChar, font_);
@@ -1533,11 +1639,11 @@ auto EPubTokenizer::addStrToPage(const pugi::char_t *str, uint32_t len) -> bool 
                 addTokenToPage(newToken);
             }
 
-        } else if (subscript_) {
-            subscript_ = false;
+        } else if (subscriptDepth_ > 0) {
             Token &newToken = tokens_.getNextAvailable();
             newToken.streamPlace = {streamOffset, currentSpineIdx_};
             newToken.tokenId = TokenId::TEXT;
+            newToken.isItalic = inItalic();
 
             do {
                 auto script = display_.getSubscriptCharacter(curChar, font_);
@@ -1563,19 +1669,21 @@ auto EPubTokenizer::addStrToPage(const pugi::char_t *str, uint32_t len) -> bool 
 #endif
             if (curChar > ' ') {
 #if CONFIG_EPUB_RENDERER_NATIVE_SUPERSUBSCRIPT_CHARACTERS
-            if (superscript_) {
-                superscript_ = false;
+            if ((superscriptDepth_ > 0) &&
+                ((textToken_ == nullptr) || (textToken_->tokenId != TokenId::SUPTEXT))) {
                 closeTextToken();
                 textToken_ = &tokens_.getNextAvailable();
                 textToken_->streamPlace = {streamOffset, currentSpineIdx_};
                 textToken_->tokenId = TokenId::SUPTEXT;
+                textToken_->isItalic = inItalic();
 
-            } else if (subscript_) {
-                subscript_ = false;
+            } else if ((subscriptDepth_ > 0) && (superscriptDepth_ == 0) &&
+                       ((textToken_ == nullptr) || (textToken_->tokenId != TokenId::SUBTEXT))) {
                 closeTextToken();
                 textToken_ = &tokens_.getNextAvailable();
                 textToken_->streamPlace = {streamOffset, currentSpineIdx_};
                 textToken_->tokenId = TokenId::SUBTEXT;
+                textToken_->isItalic = inItalic();
 
             } else
 #endif
@@ -1584,6 +1692,7 @@ auto EPubTokenizer::addStrToPage(const pugi::char_t *str, uint32_t len) -> bool 
                 textToken_ = &tokens_.getNextAvailable();
                 textToken_->streamPlace = {streamOffset, currentSpineIdx_};
                 textToken_->tokenId = TokenId::TEXT;
+                textToken_->isItalic = inItalic();
 
                 textCharCount_ = 0;
             }
