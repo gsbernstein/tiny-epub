@@ -1,5 +1,12 @@
 #include "Pager.hpp"
 
+#if CONFIG_EPUB_RENDERER_NATIVE_SUPERSUBSCRIPT_CHARACTERS
+static constexpr uint16_t SUPSUB_TOKENS =
+    static_cast<uint16_t>(TokenId::SUBTEXT) | static_cast<uint16_t>(TokenId::SUPTEXT);
+#else
+static constexpr uint16_t SUPSUB_TOKENS = 0;
+#endif
+
 // Takes the last token entered in the tokens_[] array and include it in the page.
 //
 // The dontStop parameter is used in the context of the TXT file format when going backward, such
@@ -11,6 +18,7 @@
 auto Pager::addLastTokenToPage(bool dontStop) -> bool {
 
     Token &token = tokens_.getLast();
+    carriedTokenCount_ = 1;
 
 #if REND_DEBUG
     LOGD(REND_TAG, "%s...", getTokenIdStr(token.tokenId));
@@ -50,20 +58,28 @@ auto Pager::addLastTokenToPage(bool dontStop) -> bool {
             // We are at the end of a line
 
             // LOGD(REND_TAG, "--> End of line, Line width: %" PRIu16, currentLineWidth_);
+            // Fragments of the same word as this token (split by a style change, a footnote
+            // marker or a link delimiter) move to the next line with it.
+            GluedRun run = gluedRunBeforeLast();
+            lines_[linesTailIdx_].tokenCount -= run.count;
+            lines_[linesTailIdx_].length -= run.length;
+
             // Complete the line, passing to the next one
             newLine(NEWLINE_DECI_LINE_HEIGHT);
             if (!dontStop && ((currentPageDecilineHeight_ + heightRequired) > maxDeciLines_)) {
                 // The page is complete. The current token will be the first to next page
-                setNextPagePlace(token.streamPlace);
+                carriedTokenCount_ = run.count + 1;
+                setNextPagePlace(run.count > 0 ? tokens_[run.firstIdx].streamPlace
+                                               : token.streamPlace);
                 LOGD(REND_TAG, "Page completed: %" PRIu16 " decilines. Max: %" PRIu16,
                      currentPageDecilineHeight_, maxDeciLines_);
                 return false;
             }
             // The page is not complete, the current token is the first to appear on next line
-            currentLineWidth_ += token.pixWidth;
-            lines_[linesTailIdx_].tokenIdx = tokens_.getLastIdx();
-            lines_[linesTailIdx_].tokenCount++;
-            lines_[linesTailIdx_].length += token.length;
+            currentLineWidth_ += run.width + token.pixWidth;
+            lines_[linesTailIdx_].tokenIdx = (run.count > 0) ? run.firstIdx : tokens_.getLastIdx();
+            lines_[linesTailIdx_].tokenCount += run.count + 1;
+            lines_[linesTailIdx_].length += run.length + token.length;
         } else if (lines_[linesTailIdx_].tokenCount == 0) {
             if (!dontStop && ((currentPageDecilineHeight_ + heightRequired) > maxDeciLines_)) {
                 setNextPagePlace(token.streamPlace);
@@ -239,6 +255,48 @@ void Pager::newLine(uint16_t height) {
     // LOGD(REND_TAG, "NewLine left Indent: %" PRIu16, leftIndent_);
 };
 
+// Finds the tokens at the end of the current line that belong to the same word as the last token
+// added: consecutive text tokens with no space between them. A break is still allowed after a
+// hyphen. Returns an empty run if the word starts the line (it has to be broken somewhere) or if it
+// wouldn't fit on an empty line either.
+auto Pager::gluedRunBeforeLast() const -> GluedRun {
+    GluedRun run{tokens_.getLastIdx(), 0, 0, 0};
+    const LineInfo &line = lines_[linesTailIdx_];
+    if ((line.tokenCount == 0) ||
+        (tokens_.addToTokenIdx(line.tokenIdx, line.tokenCount) != tokens_.getLastIdx())) {
+        return run;
+    }
+
+    static constexpr uint16_t GLUEABLE_TOKENS =
+        static_cast<uint16_t>(TokenId::TEXT) | static_cast<uint16_t>(TokenId::NTEXT) |
+        static_cast<uint16_t>(TokenId::HTEXT) | SUPSUB_TOKENS;
+
+    Idx idx = tokens_.getLastIdx();
+    while (run.count < line.tokenCount) {
+        Idx prevIdx = idx;
+        tokens_.prevTokenIdx(prevIdx);
+        const Token &prev = tokens_[prevIdx];
+        const bool endsWithHyphen =
+            (prev.cStr != nullptr) && (prev.length > 0) && (prev.cStr[prev.length - 1] == '-');
+        if ((prev.spacesAfter != 0) || endsWithHyphen ||
+            ((static_cast<uint16_t>(prev.tokenId) & GLUEABLE_TOKENS) == 0)) {
+            break;
+        }
+        idx = prevIdx;
+        run.count++;
+        run.width += prev.pixWidth;
+        run.length += prev.length;
+    }
+
+    if ((run.count == line.tokenCount) ||
+        ((leftIndent_ + run.width + tokens_[tokens_.getLastIdx()].pixWidth) >
+         (maxLineWidth_ - rightIndent_))) {
+        return {tokens_.getLastIdx(), 0, 0, 0};
+    }
+    run.firstIdx = idx;
+    return run;
+}
+
 // Called when going back and the end place is found. Their may
 // remains a line that was not completed.
 void Pager::completeLastLine() {
@@ -282,13 +340,6 @@ auto Pager::getPageLength() const -> uint16_t {
     }
     return length;
 }
-
-#if CONFIG_EPUB_RENDERER_NATIVE_SUPERSUBSCRIPT_CHARACTERS
-static constexpr uint16_t SUPSUB_TOKENS =
-    static_cast<uint16_t>(TokenId::SUBTEXT) | static_cast<uint16_t>(TokenId::SUPTEXT);
-#else
-static constexpr uint16_t SUPSUB_TOKENS = 0;
-#endif
 
 // Retrieve a single segment from the lineinfo. Lines are cut into multiple segments around each
 // superscript or subscript token and wherever the italic state changes.
